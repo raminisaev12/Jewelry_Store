@@ -48,6 +48,11 @@ Label_name.grid(row=1, column=0, padx=0, pady=10, sticky="w")
 Entry_viborka = ttk.Entry(border_frame)
 Entry_viborka.grid(row=1, column=0, padx=105, pady=10, sticky="w")
 
+Label_category = tk.Label(border_frame,text="Категория", bg=bg_color)
+Label_category.grid(row=1, column=0, padx=235, pady=10, sticky="w")
+Entry_viborka1 = ttk.Entry(border_frame)
+Entry_viborka1.grid(row=1, column=0, padx=300, pady=10, sticky="w")
+
 ####скелет
 cols = ('name', 'category', 'metal', 'purity','weight', 'price')
 
