@@ -37,12 +37,13 @@ label_zagol.grid(row=0, column=0, padx=65, pady=20, sticky="w")
 border_frame = tk.Frame(frame, bg=bg_color, highlightbackground="black",highlightcolor="black", highlightthickness=1)
 border_frame.grid(row=1, column=0, padx=20, pady=10, sticky="w")
 
-#
+###база данных
+
 dobavl = tk.Label(border_frame, text="Добавление изделия", fg="#4A7C59",
                   font=("Segoe UI", 12, "italic"), bg=bg_color)
 dobavl.grid(row=0, column=0, padx=10, pady=(5, 0), sticky="w")
 
-
+##добавление
 for i in range(6):
     border_frame.columnconfigure(i * 2, weight=0)  # Для Label
     border_frame.columnconfigure(i * 2 + 1, weight=1)  # Для Entry
@@ -54,7 +55,7 @@ def create_field(label_text, col_idx):
     ent = tk.Entry(border_frame, bg="white", relief="flat", highlightthickness=1, highlightbackground="#A0A0A0")
     ent.grid(row=1, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
     return ent
-
+####
 
 # Создаем поля по порядку
 Entry_name = create_field("Название изделия", 0)
@@ -115,10 +116,36 @@ def connect_to_db():
         print(f"Ошибка подключения: {err}")
         return None
 
-
 db = connect_to_db()
 if db:
     print("Ура! База данных подключена!")
     db.close()
+
+def load_data_from_db():
+    for item in tree.get_children():
+        tree.delete(item)
+
+    conn = None
+    try:
+        conn = connect_to_db()
+        if conn and conn.is_connected():
+            cursor = conn.cursor()
+            # Добавим принт, чтобы понять, дошли ли мы до сюда
+            cursor.execute("SELECT name, category, metal, purity, weight, price FROM jewelry_items")
+            rows = cursor.fetchall()
+            print(f"Найдено записей в базе: {len(rows)}") # ЭТО ПОКАЖЕТ, ЧТО ПРИШЛО ИЗ БАЗЫ
+
+            for row in rows:
+                tree.insert("", tk.END, values=row)
+
+            cursor.close()
+        else:
+            print("Соединение с базой не удалось!")
+    except mysql.connector.Error as err:
+        print(f"Ошибка при работе с данными: {err}")
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+load_data_from_db()
 
 root.mainloop()
