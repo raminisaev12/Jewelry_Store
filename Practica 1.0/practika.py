@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
 import mysql.connector
+from tkinter import messagebox
 
 root = tk.Tk()
 root.title("Алмазный путь")
@@ -36,8 +37,6 @@ label_zagol.grid(row=0, column=0, padx=65, pady=20, sticky="w")
 
 border_frame = tk.Frame(frame, bg=bg_color, highlightbackground="black",highlightcolor="black", highlightthickness=1)
 border_frame.grid(row=1, column=0, padx=20, pady=10, sticky="w")
-
-###база данных
 
 dobavl = tk.Label(border_frame, text="Добавление изделия", fg="#4A7C59",
                   font=("Segoe UI", 12, "italic"), bg=bg_color)
@@ -106,20 +105,22 @@ sort_menu.add_command(label="Сначала дешевые")
 def connect_to_db():
     try:
         connection = mysql.connector.connect(
-            host="localhost",      # твой компьютер
-            user="root",           # стандартный пользователь
-            password="1234", # тот пароль, который ты задал при установке MySQL
-            database="diamond_path" # имя базы, которую мы создали
+            host="localhost",
+            user="root",
+            password="1234",
+            database="diamond_path"
         )
+        # Добавь это:
+        cursor = connection.cursor()
+        cursor.execute("SELECT @@hostname, @@port;")
+        host_info = cursor.fetchone()
+        print(f"DEBUG: Подключились к серверу: {host_info[0]}, порт: {host_info[1]}")
+        cursor.close()
+
         return connection
     except mysql.connector.Error as err:
         print(f"Ошибка подключения: {err}")
         return None
-
-db = connect_to_db()
-if db:
-    print("Ура! База данных подключена!")
-    db.close()
 
 def load_data_from_db():
     for item in tree.get_children():
@@ -147,5 +148,65 @@ def load_data_from_db():
         if conn and conn.is_connected():
             conn.close()
 load_data_from_db()
+
+
+def add_item_to_db():
+    # Собираем данные
+    data = {
+        "Название": Entry_name.get(),
+        "Категория": Entry_category.get(),
+        "Металл": Entry_metal.get(),
+        "Проба": Entry_purity.get(),
+        "Вес": Entry_weight.get(),
+        "Цена": Entry_price.get()
+    }
+
+    # Проверка на пустоту
+    for label, value in data.items():
+        if not value.strip():
+            messagebox.showwarning("Ошибка", f"Поле '{label}' обязательно!")
+            return
+
+    conn = None
+    try:
+        conn = connect_to_db()
+        cursor = conn.cursor()
+
+        # SQL запрос
+        query = "INSERT INTO jewelry_items (name, category, metal, purity, weight, price) VALUES (%s, %s, %s, %s, %s, %s)"
+        cursor.execute(query,
+                       (data["Название"], data["Категория"], data["Металл"], data["Проба"], data["Вес"], data["Цена"]))
+
+        conn.commit()
+        print(f"Успешно добавлено строк: {cursor.rowcount}")
+
+        cursor.close()
+
+        # Очистка
+        Entry_name.delete(0, tk.END)
+        Entry_category.delete(0, tk.END)
+        Entry_metal.delete(0, tk.END)
+        Entry_purity.delete(0, tk.END)
+        Entry_weight.delete(0, tk.END)
+        Entry_price.delete(0, tk.END)
+
+        messagebox.showinfo("Успех", "Изделие добавлено!")
+        load_data_from_db()
+
+    except Exception as e:
+        print(f"ДЕТАЛИ ОШИБКИ: {e}")  # ЭТО ВАЖНО
+        messagebox.showerror("Ошибка", f"Не удалось добавить в базу:\n{e}")
+    finally:
+        if conn:
+            conn.close()
+
+
+# Сама кнопка
+btn_add = tk.Button(border_frame, text="Добавить изделие", command=add_item_to_db, bg="#2D6A4F", fg="white")
+btn_add.grid(row=2, column=0, columnspan=12, pady=10)
+
+
+
+
 
 root.mainloop()
