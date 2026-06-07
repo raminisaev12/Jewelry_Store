@@ -51,35 +51,58 @@ for i in range(6):
     border_frame.columnconfigure(i * 2, weight=0)  # Для Label
     border_frame.columnconfigure(i * 2 + 1, weight=1)  # Для Entry
 
-def create_field(label_text, col_idx):
+####
+def create_field(label_text, row_idx, col_idx):
     lbl = tk.Label(border_frame, text=label_text, bg=bg_color, fg=text_color)
-    lbl.grid(row=1, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
+    # Используем row_idx вместо жесткой единицы
+    lbl.grid(row=row_idx, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
 
     ent = tk.Entry(border_frame, bg="white", relief="flat", highlightthickness=1, highlightbackground="#A0A0A0")
-    ent.grid(row=1, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
+    ent.grid(row=row_idx, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
     return ent
-####
-def create_combobox(label_text, col_idx, values_list):
+
+def create_combobox(label_text, row_idx, col_idx, values_list):
     lbl = tk.Label(border_frame, text=label_text, bg=bg_color, fg=text_color)
-    lbl.grid(row=1, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
+    # Используем row_idx вместо жесткой единицы
+    lbl.grid(row=row_idx, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
 
     combobox = ttk.Combobox(border_frame, values=values_list, state="readonly")
-    combobox.grid(row=1, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
-
+    combobox.grid(row=row_idx, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
     return combobox
 
 # Создаем поля по порядку
-Entry_name = create_field("Название изделия", 0)
-Entry_type = create_combobox("Тип", 1, ["Кольцо", "Серьги", "Браслет", "Цепочка"])
-Entry_category = create_combobox("Категория", 2, ["Свадебные", "Женские", "Мужские","Детские"])
-Entry_metal = create_combobox("Металл", 3,["Золото","Красное золото","Белое золото","Желтое золото","Серебро"])
-Entry_gemstone = create_combobox("Камень", 4, ["Нет", "Бриллиант", "Сапфир", "Рубин", "Изумруд", "Фианит"])
-Entry_purity = create_field("Проба", 5)
-Entry_weight = create_field("Вес (г)", 6)
-Entry_price = create_field("Цена (₽)", 7)
+Entry_name = create_field("Название изделия", 1, 0)
+Entry_type = create_combobox("Тип", 1, 1, ["Кольцо", "Серьги", "Браслет", "Цепочка"])
+Entry_category = create_combobox("Категория", 1, 2, ["Свадебные", "Женские", "Мужские", "Детские"])
+Entry_metal = create_combobox("Металл", 1, 3, ["Золото", "Красное золото", "Белое золото", "Желтое золото", "Серебро"])
+Entry_gemstone = create_combobox("Камень", 1, 4, ["Нет", "Бриллиант", "Сапфир", "Рубин", "Изумруд", "Фианит"])
 
+Entry_purity = create_field("Проба", 2, 0)
+Entry_weight = create_field("Вес (г)", 2, 1)
+Entry_price = create_field("Цена (₽)", 2, 2)
+Entry_size = create_combobox("Размер", 2, 3, ["15", "15.5", "16", "16.5", "17", "17.5", "18"])
+
+
+# Функция для обновления списка размеров в зависимости от типа
+def update_size_options(event):
+    selected_type = Entry_type.get()
+
+    if selected_type in ["Серьги", "Цепочка"]:
+        Entry_size['values'] = ["—"]
+        Entry_size.set("—")
+    elif selected_type == "Кольцо":
+        Entry_size['values'] = ["—", "15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19"]
+        Entry_size.set("—")  # Ставим прочерк по умолчанию
+    elif selected_type == "Браслет":
+        Entry_size['values'] = ["—", "16", "17", "18", "19", "20", "21"]
+        Entry_size.set("—")
+    else:
+        Entry_size['values'] = ["—"]
+        Entry_size.set("—")
+
+Entry_type.bind("<<ComboboxSelected>>", update_size_options)
 ####скелет
-cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'price')
+cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'price','size')
 
 tree = ttk.Treeview(root, columns=cols, show='headings',height=12)
 
@@ -92,6 +115,7 @@ tree.heading('gemstone', text='Камень',anchor="center")
 tree.heading('purity', text='Проба',anchor="center")
 tree.heading('weight', text='Вес (г)',anchor="center")
 tree.heading('price', text='Цена (₽)',anchor="center")
+tree.heading('size',text='Размер', anchor="center")
 
 for col in cols:
     tree.column(col,width=100,anchor="center")
@@ -127,7 +151,7 @@ def load_data_from_db():
         conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
-            cursor.execute("SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price FROM jewelry_items")
+            cursor.execute("SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size FROM jewelry_items")
             rows = cursor.fetchall()
             print(f"Найдено записей в базе: {len(rows)}") # ЭТО ПОКАЖЕТ, ЧТО ПРИШЛО ИЗ БАЗЫ
 
@@ -158,7 +182,8 @@ def add_item_to_db():
         "Камень": Entry_gemstone.get(),
         "Проба": Entry_purity.get(),
         "Вес": Entry_weight.get(),
-        "Цена": Entry_price.get()
+        "Цена": Entry_price.get(),
+        "Размер": Entry_size.get()
     }
 
     # Проверка на пустоту
@@ -173,7 +198,7 @@ def add_item_to_db():
         cursor = conn.cursor()
 
         # SQL запрос
-        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s)", (
+        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             data["Название"],
             data["Тип"],
             data["Категория"],
@@ -181,7 +206,8 @@ def add_item_to_db():
             data["Проба"],
             data["Вес"],
             data["Цена"],
-            data["Камень"]
+            data["Камень"],
+            data["Размер"]
         ))
 
         conn.commit()
@@ -212,10 +238,9 @@ def add_item_to_db():
         if conn:
             conn.close()
 
-
 # Сама кнопка
 btn_add = tk.Button(border_frame, text="Добавить изделие", command=add_item_to_db, bg="#2D6A4F", fg="white")
-btn_add.grid(row=2, column=0, columnspan=12, pady=10)
+btn_add.grid(row=3, column=0, columnspan=12, pady=20)
 
 ###выборка
 def search_data(event=None):
@@ -231,7 +256,7 @@ def search_data(event=None):
         if conn and conn.is_connected():
             cursor = conn.cursor()
             query = """
-                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price 
+                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size 
                 FROM jewelry_items 
                 WHERE name LIKE %s
             """
@@ -334,7 +359,7 @@ def update_filters():
     if var_cubic_zirconia .get(): selected_gemstone.append("Фианит")
 
     # 2. Формируем запрос
-    query = "SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price FROM jewelry_items WHERE 1=1"
+    query = "SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size FROM jewelry_items WHERE 1=1"
     params = []
 
     if selected_types:
@@ -431,7 +456,9 @@ stone_menu.add_checkbutton(label="Сапфир", variable=var_sapphire, command=
 stone_menu.add_checkbutton(label="Рубин", variable=var_ruby, command=update_filters)
 stone_menu.add_checkbutton(label="Изумруд", variable=var_emerald, command=update_filters)
 stone_menu.add_checkbutton(label="Фианит", variable=var_cubic_zirconia, command=update_filters)
-
+#по размеру
+size_menu = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="По размеру", menu=size_menu)
 #сортировки
 sort_menu = tk.Menu(Menu, tearoff=0)
 Menu.add_cascade(label="Сортировки", menu=sort_menu)
