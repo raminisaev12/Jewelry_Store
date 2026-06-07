@@ -1,4 +1,5 @@
 import tkinter as tk
+from re import search
 from tkinter import ttk
 from PIL import Image, ImageTk
 import mysql.connector
@@ -11,9 +12,10 @@ import string
 root = tk.Tk()
 root.title("Алмазный путь")
 root.geometry("600x400")
-
+root.state('zoomed')
 root.columnconfigure(0, weight=1)
 root.columnconfigure(1, weight=1)
+root.rowconfigure(2, weight=1)
 
 
 bg_color = "#FDF5E6"
@@ -40,7 +42,7 @@ label_zagol = tk.Label(frame, text="Алмазный путь",
 label_zagol.grid(row=0, column=0, padx=65, pady=20, sticky="w")
 
 border_frame = tk.Frame(frame, bg=bg_color, highlightbackground="black",highlightcolor="black", highlightthickness=1)
-border_frame.grid(row=1, column=0, padx=20, pady=10, sticky="w")
+border_frame.grid(row=1, column=0, padx=20, pady=2, sticky="w")
 
 dobavl = tk.Label(border_frame, text="Добавление изделия", fg="#4A7C59",
                   font=("Segoe UI", 12, "italic"), bg=bg_color)
@@ -81,7 +83,7 @@ Entry_price = create_field("Цена (₽)", 7)
 ####скелет
 cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'price')
 
-tree = ttk.Treeview(root, columns=cols, show='headings',height=8)
+tree = ttk.Treeview(root, columns=cols, show='headings',height=12)
 
 tree.heading('id', text='ID',anchor="center")
 tree.heading('name', text='Название изделия',anchor="center")
@@ -96,7 +98,7 @@ tree.heading('price', text='Цена (₽)',anchor="center")
 for col in cols:
     tree.column(col,width=100,anchor="center")
 
-tree.grid(row=1, column=0, columnspan=2, padx=20, pady=20, sticky="ew")
+tree.grid(row=2, column=0, columnspan=2, padx=20, pady=5, sticky="nsew")
 
 
 
@@ -237,9 +239,48 @@ def add_item_to_db():
 btn_add = tk.Button(border_frame, text="Добавить изделие", command=add_item_to_db, bg="#2D6A4F", fg="white")
 btn_add.grid(row=2, column=0, columnspan=12, pady=10)
 
+###выборка
+def search_data(event=None):
+    search = viborka.get()
 
-###айди
 
+    for item in tree.get_children():
+        tree.delete(item)
+
+
+    conn = connect_to_db()
+    try:
+        if conn and conn.is_connected():
+            cursor = conn.cursor()
+            query = """
+                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price 
+                FROM jewelry_items 
+                WHERE name LIKE %s
+            """
+            search_pattern = f"%{search}%"
+            cursor.execute(query, (search_pattern,))
+
+            rows = cursor.fetchall()
+            for row in rows:
+                tree.insert("", tk.END, values=row)
+            cursor.close()
+
+    except mysql.connector.Error as err:
+        print(f"Ошибка поиска: {err}")
+
+    finally:
+            if conn and conn.is_connected():
+                conn.close()
+
+
+viborka_label=tk.Label(root,text="Поиск изделия",fg=text_color,bg=bg_color,font=("Segoe UI", 12, "italic"))
+viborka_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
+
+
+viborka = ttk.Entry(root,width=30)
+viborka.grid(row=1, column=0, padx=125, pady=5, sticky="w")
+
+viborka.bind("<KeyRelease>",search_data)
 
 
 root.mainloop()
