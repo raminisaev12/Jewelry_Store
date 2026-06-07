@@ -3,6 +3,10 @@ from tkinter import ttk
 from PIL import Image, ImageTk
 import mysql.connector
 from tkinter import messagebox
+import random
+import string
+
+
 
 root = tk.Tk()
 root.title("Алмазный путь")
@@ -55,29 +59,42 @@ def create_field(label_text, col_idx):
     ent.grid(row=1, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
     return ent
 ####
+def create_combobox(label_text, col_idx, values_list):
+    lbl = tk.Label(border_frame, text=label_text, bg=bg_color, fg=text_color)
+    lbl.grid(row=1, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
+
+    combobox = ttk.Combobox(border_frame, values=values_list, state="readonly")
+    combobox.grid(row=1, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
+
+    return combobox
 
 # Создаем поля по порядку
 Entry_name = create_field("Название изделия", 0)
-Entry_category = create_field("Категория", 1)
-Entry_metal = create_field("Металл", 2)
-Entry_purity = create_field("Проба", 3)
-Entry_weight = create_field("Вес", 4)
-Entry_price = create_field("Цена", 5)
+Entry_type = create_combobox("Тип", 1, ["Кольцо", "Серьги", "Браслет", "Цепочка"])
+Entry_category = create_combobox("Категория", 2, ["Свадебные", "Женские", "Мужские","Детские"])
+Entry_metal = create_combobox("Металл", 3,["Золото","Красное золото","Белое золото","Желтое золото","Серебро"])
+Entry_gemstone = create_combobox("Камень", 4, ["Нет", "Бриллиант", "Сапфир", "Рубин", "Изумруд", "Фианит"])
+Entry_purity = create_field("Проба", 5)
+Entry_weight = create_field("Вес (г)", 6)
+Entry_price = create_field("Цена (₽)", 7)
 
 ####скелет
-cols = ('name', 'category', 'metal', 'purity','weight', 'price')
+cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'price')
 
 tree = ttk.Treeview(root, columns=cols, show='headings',height=8)
 
-tree.heading('name', text='Название изделия')
-tree.heading('category', text='Категория')
-tree.heading('metal', text='Металл')
-tree.heading('purity', text='Проба')
-tree.heading('weight', text='Вес (г)')
-tree.heading('price', text='Цена (₽)')
+tree.heading('id', text='ID',anchor="center")
+tree.heading('name', text='Название изделия',anchor="center")
+tree.heading('category', text='Категория',anchor="center")
+tree.heading('type', text='Тип',anchor="center")
+tree.heading('metal', text='Металл',anchor="center")
+tree.heading('gemstone', text='Камень',anchor="center")
+tree.heading('purity', text='Проба',anchor="center")
+tree.heading('weight', text='Вес (г)',anchor="center")
+tree.heading('price', text='Цена (₽)',anchor="center")
 
 for col in cols:
-    tree.column(col,width=100)
+    tree.column(col,width=100,anchor="center")
 
 tree.grid(row=1, column=0, columnspan=2, padx=20, pady=20, sticky="ew")
 
@@ -110,7 +127,6 @@ def connect_to_db():
             password="1234",
             database="diamond_path"
         )
-        # Добавь это:
         cursor = connection.cursor()
         cursor.execute("SELECT @@hostname, @@port;")
         host_info = cursor.fetchone()
@@ -131,8 +147,7 @@ def load_data_from_db():
         conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
-            # Добавим принт, чтобы понять, дошли ли мы до сюда
-            cursor.execute("SELECT name, category, metal, purity, weight, price FROM jewelry_items")
+            cursor.execute("SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price FROM jewelry_items")
             rows = cursor.fetchall()
             print(f"Найдено записей в базе: {len(rows)}") # ЭТО ПОКАЖЕТ, ЧТО ПРИШЛО ИЗ БАЗЫ
 
@@ -149,13 +164,18 @@ def load_data_from_db():
             conn.close()
 load_data_from_db()
 
+def generate_five_digit_id():
+    return random.randint(10000, 99999)
 
 def add_item_to_db():
     # Собираем данные
+    new_id = generate_five_digit_id()
     data = {
         "Название": Entry_name.get(),
+        "Тип": Entry_type.get(),
         "Категория": Entry_category.get(),
         "Металл": Entry_metal.get(),
+        "Камень": Entry_gemstone.get(),
         "Проба": Entry_purity.get(),
         "Вес": Entry_weight.get(),
         "Цена": Entry_price.get()
@@ -173,9 +193,16 @@ def add_item_to_db():
         cursor = conn.cursor()
 
         # SQL запрос
-        query = "INSERT INTO jewelry_items (name, category, metal, purity, weight, price) VALUES (%s, %s, %s, %s, %s, %s)"
-        cursor.execute(query,
-                       (data["Название"], data["Категория"], data["Металл"], data["Проба"], data["Вес"], data["Цена"]))
+        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s)", (
+            data["Название"],
+            data["Тип"],
+            data["Категория"],
+            data["Металл"],
+            data["Проба"],  # 5-й параметр
+            data["Вес"],  # 6-й параметр
+            data["Цена"],  # 7-й параметр
+            data["Камень"]  # 8-й параметр (он теперь последний!)
+        ))
 
         conn.commit()
         print(f"Успешно добавлено строк: {cursor.rowcount}")
@@ -184,8 +211,10 @@ def add_item_to_db():
 
         # Очистка
         Entry_name.delete(0, tk.END)
-        Entry_category.delete(0, tk.END)
-        Entry_metal.delete(0, tk.END)
+        Entry_type.set("")
+        Entry_category.set("")
+        Entry_metal.set("")
+        Entry_gemstone.set("")
         Entry_purity.delete(0, tk.END)
         Entry_weight.delete(0, tk.END)
         Entry_price.delete(0, tk.END)
@@ -193,10 +222,13 @@ def add_item_to_db():
         messagebox.showinfo("Успех", "Изделие добавлено!")
         load_data_from_db()
 
+
     except Exception as e:
-        print(f"ДЕТАЛИ ОШИБКИ: {e}")  # ЭТО ВАЖНО
+
         messagebox.showerror("Ошибка", f"Не удалось добавить в базу:\n{e}")
+
     finally:
+
         if conn:
             conn.close()
 
@@ -206,6 +238,7 @@ btn_add = tk.Button(border_frame, text="Добавить изделие", comman
 btn_add.grid(row=2, column=0, columnspan=12, pady=10)
 
 
+###айди
 
 
 
