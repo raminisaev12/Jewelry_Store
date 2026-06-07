@@ -178,10 +178,10 @@ def add_item_to_db():
             data["Тип"],
             data["Категория"],
             data["Металл"],
-            data["Проба"],  # 5-й параметр
-            data["Вес"],  # 6-й параметр
-            data["Цена"],  # 7-й параметр
-            data["Камень"]  # 8-й параметр (он теперь последний!)
+            data["Проба"],
+            data["Вес"],
+            data["Цена"],
+            data["Камень"]
         ))
 
         conn.commit()
@@ -260,56 +260,118 @@ viborka.grid(row=1, column=0, padx=125, pady=5, sticky="w")
 
 viborka.bind("<KeyRelease>",search_data)
 
+# Текущее правило сортировки (пусто по умолчанию)
+current_sort_clause = ""
+
+def set_sort(sort_clause):
+    global current_sort_clause
+    #Запоминаем выбор пользователя (например, "price ASC" или "name DESC")
+    current_sort_clause = sort_clause
+    update_filters()
+
+def reset_all():
+    for var in [var_ring,var_earrings, var_bracelet, var_chain,var_wedding,var_woman,var_man,var_childish,var_gold,var_redgold,var_whitegold,
+                var_yellowgold, var_serebro,var_no,var_diamond, var_sapphire,var_ruby,var_emerald,var_cubic_zirconia]:
+        var.set(False)
+
+    global current_sort_clause
+    current_sort_clause = ""
+    load_data_from_db()
+
 ##по типу
 var_ring = tk.BooleanVar()
 var_earrings = tk.BooleanVar()
 var_bracelet = tk.BooleanVar()
 var_chain = tk.BooleanVar()
 
-##
+#по категории
 var_wedding = tk.BooleanVar()
 var_woman= tk.BooleanVar()
 var_man= tk.BooleanVar()
 var_childish= tk.BooleanVar()
 
+#по металлу
+var_gold= tk.BooleanVar()
+var_redgold= tk.BooleanVar()
+var_whitegold= tk.BooleanVar()
+var_yellowgold= tk.BooleanVar()
+var_serebro= tk.BooleanVar()
+
+#по камням
+var_no= tk.BooleanVar()
+var_diamond= tk.BooleanVar()
+var_sapphire= tk.BooleanVar()
+var_ruby= tk.BooleanVar()
+var_emerald= tk.BooleanVar()
+var_cubic_zirconia= tk.BooleanVar()
 def update_filters():
-    # 1. Собираем список активных фильтров
+    # 1. Собираем списки выбора
     selected_types = []
-    selected_categories = []
-    #тип
     if var_ring.get(): selected_types.append("Кольцо")
     if var_earrings.get(): selected_types.append("Серьги")
     if var_bracelet.get(): selected_types.append("Браслет")
     if var_chain.get(): selected_types.append("Цепочка")
 
-    #категория
+    selected_categories = []
     if var_wedding.get(): selected_categories.append("Свадебные")
     if var_woman.get(): selected_categories.append("Женские")
     if var_man.get(): selected_categories.append("Мужские")
     if var_childish.get(): selected_categories.append("Детские")
 
-    # 2. Если ничего не выбрано — показываем всё
-    if not selected_types:
-        load_data_from_db()
-        return
+    selected_metal = []
+    if var_gold.get(): selected_metal.append("Золото")
+    if var_redgold.get(): selected_metal.append("Красное золото")
+    if var_whitegold.get(): selected_metal.append("Белое золото")
+    if var_yellowgold.get(): selected_metal.append("Желтое золото")
+    if var_serebro.get(): selected_metal.append("Серебро")
 
-    # 3. Запрос к базе с использованием IN
+    selected_gemstone = []
+    if var_no.get(): selected_gemstone.append("Нет")
+    if var_diamond.get(): selected_gemstone.append("Бриллиант")
+    if var_sapphire.get(): selected_gemstone.append("Сапфир")
+    if var_ruby.get(): selected_gemstone.append("Рубин")
+    if var_emerald.get(): selected_gemstone.append("Изумруд")
+    if var_cubic_zirconia .get(): selected_gemstone.append("Фианит")
+
+    # 2. Формируем запрос
+    query = "SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price FROM jewelry_items WHERE 1=1"
+    params = []
+
+    if selected_types:
+        placeholders = ', '.join(['%s'] * len(selected_types))
+        query += f" AND type IN ({placeholders})"
+        params.extend(selected_types)
+
+    if selected_categories:
+        placeholders = ', '.join(['%s'] * len(selected_categories))
+        query += f" AND category IN ({placeholders})"
+        params.extend(selected_categories)
+
+    if selected_metal:
+        placeholders = ', '.join(['%s'] * len(selected_metal))
+        query += f" AND metal IN ({placeholders})"
+        params.extend(selected_metal)
+
+    if selected_gemstone:
+        placeholders = ', '.join(['%s'] * len(selected_gemstone))
+        query += f" AND gemstone IN ({placeholders})"
+        params.extend(selected_gemstone)
+
+    #ДОБАВЛЯЕМ СОРТИРОВКУ
+    if current_sort_clause:
+        query += f" ORDER BY {current_sort_clause}"
+
+    # 3. Выполняем
     conn = None
     try:
         conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
 
-            # Создаем динамическую строку для SQL
-            placeholders = ', '.join(['%s'] * len(selected_types))
-            query = f"""
-                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price 
-                FROM jewelry_items 
-                WHERE type IN ({placeholders})
-            """
-            cursor.execute(query, tuple(selected_types))
+            cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
-            # Очищаем таблицу и вставляем результаты
+
+            # Очищаем и обновляем
             for item in tree.get_children():
                 tree.delete(item)
             for row in rows:
@@ -351,15 +413,31 @@ cat_menu.add_checkbutton(label="Мужские", variable=var_man, command=updat
 cat_menu.add_checkbutton(label="Детские", variable=var_childish, command=update_filters)
 
 #по металлу
+metal_menu = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="По металлу", menu=metal_menu)
 
+metal_menu.add_checkbutton(label="Золото", variable=var_gold, command=update_filters)
+metal_menu.add_checkbutton(label="Красное золото", variable=var_redgold, command=update_filters)
+metal_menu.add_checkbutton(label="Белое золото", variable=var_whitegold, command=update_filters)
+metal_menu.add_checkbutton(label="Желтое золото", variable=var_yellowgold, command=update_filters)
+metal_menu.add_checkbutton(label="Серебро", variable=var_serebro, command=update_filters)
 #по камню
+stone_menu = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="По камню", menu=stone_menu)
+
+stone_menu.add_checkbutton(label="Нет", variable=var_no, command=update_filters)
+stone_menu.add_checkbutton(label="Бриллиант", variable=var_diamond, command=update_filters)
+stone_menu.add_checkbutton(label="Сапфир", variable=var_sapphire, command=update_filters)
+stone_menu.add_checkbutton(label="Рубин", variable=var_ruby, command=update_filters)
+stone_menu.add_checkbutton(label="Изумруд", variable=var_emerald, command=update_filters)
+stone_menu.add_checkbutton(label="Фианит", variable=var_cubic_zirconia, command=update_filters)
 
 #сортировки
 sort_menu = tk.Menu(Menu, tearoff=0)
 Menu.add_cascade(label="Сортировки", menu=sort_menu)
-sort_menu.add_command(label="Сортировка от А до Я")
-sort_menu.add_command(label="Сортировка от Я до А")
-sort_menu.add_command(label="Сначала дешевые")
+sort_menu.add_command(label="Сортировка от А до Я",command=lambda: set_sort("name ASC"))
+sort_menu.add_command(label="Сортировка от Я до А",command=lambda: set_sort("name DESC"))
+sort_menu.add_command(label="Сначала дешевые",command=lambda: set_sort("price ASC"))
 
 
 #размер
