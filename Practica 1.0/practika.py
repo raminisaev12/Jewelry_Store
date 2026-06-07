@@ -1,11 +1,9 @@
 import tkinter as tk
-from re import search
 from tkinter import ttk
 from PIL import Image, ImageTk
 import mysql.connector
 from tkinter import messagebox
 import random
-import string
 
 
 
@@ -99,26 +97,6 @@ for col in cols:
     tree.column(col,width=100,anchor="center")
 
 tree.grid(row=2, column=0, columnspan=2, padx=20, pady=5, sticky="nsew")
-
-
-
-#меню
-Menu = tk.Menu(root)
-root.config(menu=Menu)
-
-filter_menu = tk.Menu(Menu, tearoff=0,fg=text_color)
-Menu.add_cascade(label="Фильтры", menu=filter_menu)
-
-filter_menu2 = tk.Menu(filter_menu, tearoff=0)
-filter_menu.add_cascade(label="Название изделия", menu=filter_menu2)
-
-
-sort_menu = tk.Menu(Menu, tearoff=0)
-Menu.add_cascade(label="Сортировки", menu=sort_menu)
-sort_menu.add_command(label="Сортировка от А до Я")
-sort_menu.add_command(label="Сортировка от Я до А")
-sort_menu.add_command(label="Сначала дешевые")
-
 
 ###базза данных
 def connect_to_db():
@@ -282,5 +260,107 @@ viborka.grid(row=1, column=0, padx=125, pady=5, sticky="w")
 
 viborka.bind("<KeyRelease>",search_data)
 
+##по типу
+var_ring = tk.BooleanVar()
+var_earrings = tk.BooleanVar()
+var_bracelet = tk.BooleanVar()
+var_chain = tk.BooleanVar()
 
+##
+var_wedding = tk.BooleanVar()
+var_woman= tk.BooleanVar()
+var_man= tk.BooleanVar()
+var_childish= tk.BooleanVar()
+
+def update_filters():
+    # 1. Собираем список активных фильтров
+    selected_types = []
+    selected_categories = []
+    #тип
+    if var_ring.get(): selected_types.append("Кольцо")
+    if var_earrings.get(): selected_types.append("Серьги")
+    if var_bracelet.get(): selected_types.append("Браслет")
+    if var_chain.get(): selected_types.append("Цепочка")
+
+    #категория
+    if var_wedding.get(): selected_categories.append("Свадебные")
+    if var_woman.get(): selected_categories.append("Женские")
+    if var_man.get(): selected_categories.append("Мужские")
+    if var_childish.get(): selected_categories.append("Детские")
+
+    # 2. Если ничего не выбрано — показываем всё
+    if not selected_types:
+        load_data_from_db()
+        return
+
+    # 3. Запрос к базе с использованием IN
+    conn = None
+    try:
+        conn = connect_to_db()
+        if conn and conn.is_connected():
+            cursor = conn.cursor()
+
+            # Создаем динамическую строку для SQL
+            placeholders = ', '.join(['%s'] * len(selected_types))
+            query = f"""
+                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price 
+                FROM jewelry_items 
+                WHERE type IN ({placeholders})
+            """
+            cursor.execute(query, tuple(selected_types))
+            rows = cursor.fetchall()
+            # Очищаем таблицу и вставляем результаты
+            for item in tree.get_children():
+                tree.delete(item)
+            for row in rows:
+                tree.insert("", tk.END, values=row)
+            cursor.close()
+    except mysql.connector.Error as err:
+        print(f"Ошибка фильтрации: {err}")
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+#меню
+#фильтры
+Menu = tk.Menu(root)
+root.config(menu=Menu)
+
+filter_menu = tk.Menu(Menu, tearoff=0,fg=text_color)
+Menu.add_cascade(label="Фильтры", menu=filter_menu)
+
+filter_menu2 = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="Название изделия", menu=filter_menu2)
+
+#по типу
+type_menu = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="По типу", menu=type_menu)
+
+type_menu.add_checkbutton(label="Кольцо", variable=var_ring, command=update_filters)
+type_menu.add_checkbutton(label="Серьги", variable=var_earrings, command=update_filters)
+type_menu.add_checkbutton(label="Браслет", variable=var_bracelet, command=update_filters)
+type_menu.add_checkbutton(label="Цепочка", variable=var_chain, command=update_filters)
+
+#категория
+cat_menu = tk.Menu(filter_menu, tearoff=0)
+filter_menu.add_cascade(label="По категории", menu=cat_menu)
+
+cat_menu.add_checkbutton(label="Свадебные", variable=var_wedding, command=update_filters)
+cat_menu.add_checkbutton(label="Женские", variable=var_woman, command=update_filters)
+cat_menu.add_checkbutton(label="Мужские", variable=var_man, command=update_filters)
+cat_menu.add_checkbutton(label="Детские", variable=var_childish, command=update_filters)
+
+#по металлу
+
+#по камню
+
+#сортировки
+sort_menu = tk.Menu(Menu, tearoff=0)
+Menu.add_cascade(label="Сортировки", menu=sort_menu)
+sort_menu.add_command(label="Сортировка от А до Я")
+sort_menu.add_command(label="Сортировка от Я до А")
+sort_menu.add_command(label="Сначала дешевые")
+
+
+#размер
 root.mainloop()
