@@ -328,20 +328,25 @@ btn_add.grid(row=3, column=0, columnspan=12, pady=20)
 def search_data(event=None):
     search = viborka.get()
 
-
+    # Очищаем таблицу
     for item in tree.get_children():
         tree.delete(item)
 
-
-    conn = connect_to_db()
+    conn = None
     try:
+        conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
+
+            # ДОБАВЛЯЕМ УСЛОВИЕ WHERE name LIKE %s
             query = """
                 SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
-                FROM jewelry_items
+                FROM jewelry_items 
+                WHERE name LIKE %s
             """
             search_pattern = f"%{search}%"
+
+            # Передаем параметр в execute
             cursor.execute(query, (search_pattern,))
 
             rows = cursor.fetchall()
@@ -351,21 +356,24 @@ def search_data(event=None):
 
     except mysql.connector.Error as err:
         print(f"Ошибка поиска: {err}")
+        messagebox.showerror("Ошибка поиска", str(err))
 
     finally:
-            if conn and conn.is_connected():
-                conn.close()
+        if conn and conn.is_connected():
+            conn.close()
 
 
 viborka_label=tk.Label(root,text="Поиск изделия",fg=text_color,bg=bg_color,font=("Segoe UI", 12, "italic"))
 viborka_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
 
 
-viborka = ttk.Entry(root,width=30)
+viborka = ttk.Entry(root,width=20)
 viborka.grid(row=1, column=0, padx=125, pady=5, sticky="w")
 
 viborka.bind("<KeyRelease>",search_data)
 
+update = tk.Button(root, text="Нажмите для обновления данных",width=30,bg=text_color,fg="white",command=load_data_from_db)
+update.grid(row=1, column=0, padx=275, pady=10, sticky="w")
 # Текущее правило сортировки (пусто по умолчанию)
 current_sort_clause = ""
 
@@ -623,7 +631,6 @@ filter_menu.add_cascade(label="По размеру", menu=size_menu)
 
 filter_menu.add_separator()
 filter_menu.add_command(label="Сбросить фильтры", command=reset_filters, foreground="red")
-
 
 #сортировки
 sort_menu = tk.Menu(Menu, tearoff=0)
