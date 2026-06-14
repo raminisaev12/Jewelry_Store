@@ -368,14 +368,89 @@ viborka.bind("<KeyRelease>",search_data)
 
 # Текущее правило сортировки (пусто по умолчанию)
 current_sort_clause = ""
-def buy_item():
-    selected_item = tree.selection()
 
+
+def open_buy_window():
+    selected_item = tree.selection()
     if not selected_item:
-        messagebox.showwarning("Внимание", "Выберите изделия для покупки")
+        messagebox.showwarning("Внимание", "Выберите изделие для покупки")
         return
-    if not messagebox.askyesno("Покупка", "Вы уверены, что хотите купить изделие"):
-        return
+
+    item_data = tree.item(selected_item, "values")
+    item_name = item_data[1]
+    price_per_item = float(item_data[10])
+    available_qty = int(item_data[9])
+
+    buy_win = tk.Toplevel(root)
+    buy_win.title(f"Покупка: {item_name}")
+    buy_win.geometry("350x520")
+    buy_win.configure(bg=bg_color)
+
+    tk.Label(buy_win, text=f"Изделие: {item_name}", font=("Segoe UI", 12, "bold"), bg=bg_color, fg=text_color).pack(
+        pady=10)
+
+    # Продавец
+    tk.Label(buy_win, text="Продавец ФИО:", bg=bg_color, fg=text_color).pack()
+    combo_seller = ttk.Combobox(buy_win, values=["Иванов И.И.", "Петров П.П.", "Сидорова А.А."], state="readonly")
+    combo_seller.pack(pady=5)
+    combo_seller.current(0)
+
+    # Количество
+    tk.Label(buy_win, text="Количество:", bg=bg_color, fg=text_color).pack()
+    koli = tk.Entry(buy_win, width=10, justify="center")
+    koli.insert(0, "1")
+    koli.pack(pady=5)
+
+    # Способ оплаты
+    payment_frame = tk.LabelFrame(buy_win, text="Способ оплаты", bg=bg_color, fg=text_color, padx=10, pady=10)
+    payment_frame.pack(pady=15, padx=30, fill="x")
+    payment_method = tk.StringVar(value="Наличные")
+
+    for opt in ["Наличные", "Карта", "Перевод"]:
+        tk.Radiobutton(payment_frame, text=opt, variable=payment_method, value=opt, bg=bg_color,
+                       selectcolor=bg_color).pack(anchor="w")
+
+    # Метка для итоговой суммы
+    total_label = tk.Label(buy_win, text=f"К оплате: {price_per_item} ₽", font=("Segoe UI", 12, "bold"),bg=bg_color, fg="#C1121F")
+    total_label.pack(pady=10)
+
+    #Функция расчета
+    def calculate_total(*args):
+        qty_str = koli.get()
+        if qty_str.isdigit():
+            total = int(qty_str) * price_per_item
+            total_label.config(text=f"К оплате: {total:,.2f} ₽")
+        else:
+            total_label.config(text="К оплате: ошибка")
+
+    koli.bind("<KeyRelease>", calculate_total)
+
+    def confirm_purchase():
+        qty_str = koli.get()
+        if not qty_str.isdigit() or int(qty_str) <= 0:
+            messagebox.showwarning("Ошибка", "Введите корректное количество!")
+            return
+
+        qty = int(qty_str)
+        if qty > available_qty:
+            messagebox.showwarning("Мало товара", f"В наличии только {available_qty} шт.")
+            return
+
+        try:
+            numeric_id = item_data[0].split("-")[1]
+            conn = connect_to_db()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE jewelry_items SET quantity = quantity - %s WHERE id = %s", (qty, numeric_id))
+            conn.commit()
+            conn.close()
+            messagebox.showinfo("Успех",
+                                f"Покупка оформлена!\nПродавец: {combo_seller.get()}\nОплата: {payment_method.get()}")
+            buy_win.destroy()
+            load_data_from_db()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось обновить БД: {e}")
+
+    tk.Button(buy_win, text="Подтвердить", command=confirm_purchase, bg=text_color, fg="white", width=20).pack(pady=10)
 
 
 def set_sort(sort_clause):
@@ -441,7 +516,11 @@ def update_filters():
     if var_cubic_zirconia .get(): selected_gemstone.append("Фианит")
 
     # 2. Формируем запрос
-    query = "SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size FROM jewelry_items WHERE 1=1"
+    query = """
+    SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
+    FROM jewelry_items 
+    WHERE 1=1
+"""
     params = []
 
     if selected_types:
@@ -566,7 +645,7 @@ otchet_menu.add_checkbutton(label="1")
 
 
 #покупка
-buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white")
+buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white",command=open_buy_window)
 buy.grid(row=1, column=0, padx=700, pady=10, sticky="w")
 
 root.mainloop()
