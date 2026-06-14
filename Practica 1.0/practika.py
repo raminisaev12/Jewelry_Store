@@ -15,6 +15,10 @@ root.columnconfigure(0, weight=1)
 root.columnconfigure(1, weight=1)
 root.rowconfigure(2, weight=1)
 
+l =Image.open("logo2.png")
+l  = ImageTk.PhotoImage(l)
+
+root.iconphoto(True, l)
 
 bg_color = "#FDF5E6"
 text_color = "#2D6A4F"
@@ -81,28 +85,45 @@ Entry_purity = create_field("Проба", 2, 0)
 Entry_weight = create_field("Вес (г)", 2, 1)
 Entry_price = create_field("Цена (₽)", 2, 2)
 Entry_size = create_combobox("Размер", 2, 3, ["15", "15.5", "16", "16.5", "17", "17.5", "18"])
+Entry_quantity = create_field("Количество", 2, 4)
 
+lbl_size = tk.Label(border_frame, text="Размер", bg=bg_color, fg=text_color)
+lbl_size.grid(row=2, column=3 * 2, padx=(10, 5), pady=10, sticky="ew")
 
+Entry_size = ttk.Combobox(border_frame, values=["15", "16", "17", "18"], state="readonly")
+Entry_size.grid(row=2, column=3 * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
 # Функция для обновления списка размеров в зависимости от типа
 def update_size_options(event):
     selected_type = Entry_type.get()
 
-    if selected_type in ["Серьги", "Цепочка"]:
+    if selected_type == "Серьги":
+        lbl_size.config(text="Размер")  # Для серег можно просто скрыть или оставить "Размер"
         Entry_size['values'] = ["—"]
         Entry_size.set("—")
+
     elif selected_type == "Кольцо":
-        Entry_size['values'] = ["—", "15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19"]
-        Entry_size.set("—")  # Ставим прочерк по умолчанию
+        lbl_size.config(text="Размер")
+        Entry_size['values'] = ["15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19"]
+        Entry_size.set("17")
+
     elif selected_type == "Браслет":
-        Entry_size['values'] = ["—", "16", "17", "18", "19", "20", "21"]
-        Entry_size.set("—")
+        lbl_size.config(text="Обхват (см)")
+        Entry_size['values'] = ["16", "17", "18", "19", "20", "21"]
+        Entry_size.set("18")
+
+    elif selected_type == "Цепочка":
+        lbl_size.config(text="Длина (см)")
+        Entry_size['values'] = ["40", "45", "50", "55", "60", "65"]
+        Entry_size.set("45")
+
     else:
+        lbl_size.config(text="Размер")
         Entry_size['values'] = ["—"]
         Entry_size.set("—")
 
 Entry_type.bind("<<ComboboxSelected>>", update_size_options)
 ####скелет
-cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'price','size')
+cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'size', 'quantity', 'price')
 
 tree = ttk.Treeview(root, columns=cols, show='headings',height=12)
 
@@ -114,9 +135,9 @@ tree.heading('metal', text='Металл',anchor="center")
 tree.heading('gemstone', text='Камень',anchor="center")
 tree.heading('purity', text='Проба',anchor="center")
 tree.heading('weight', text='Вес (г)',anchor="center")
-tree.heading('price', text='Цена (₽)',anchor="center")
 tree.heading('size',text='Размер', anchor="center")
-
+tree.heading('quantity', text='Кол-во', anchor="center")
+tree.heading('price', text='Цена (₽)',anchor="center")
 for col in cols:
     tree.column(col,width=100,anchor="center")
 
@@ -151,7 +172,10 @@ def load_data_from_db():
         conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
-            cursor.execute("SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size FROM jewelry_items")
+            cursor.execute("""
+                            SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
+                            FROM jewelry_items
+                        """)
             rows = cursor.fetchall()
             print(f"Найдено записей в базе: {len(rows)}") # ЭТО ПОКАЖЕТ, ЧТО ПРИШЛО ИЗ БАЗЫ
 
@@ -168,6 +192,62 @@ def load_data_from_db():
             conn.close()
 load_data_from_db()
 
+def delete_selected_item():
+    selected_item = tree.selection()
+
+    if not selected_item:
+        messagebox.showwarning("Внимание","Выберите изделия для удаления")
+        return
+    if not messagebox.askyesno("Удаление","Вы уверены, что хотите удалить изделие"):
+        return
+
+    item_data = tree.item(selected_item, "values")
+    full_id = item_data[0]
+
+    try:
+        numeric_id = full_id.split("-")[1]
+    except IndexError:
+        messagebox.showerror("Ошибка","Не удалось определить ID изделия")
+        return
+
+    conn = None
+    try:
+        conn = connect_to_db()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM jewelry_items WHERE id = %s", (numeric_id,))
+        conn.commit()
+        cursor.close()
+        messagebox.showinfo("Успех", "Изделие успешно удалено!")
+        update_filters()
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Не удалось удалить из базы:\n{e}")
+
+    finally:
+        if conn and conn.is_connected():
+            conn.close()
+
+
+def reset_sorting():
+    global current_sort_clause
+    current_sort_clause = ""
+    # Обновляем либо через фильтры (если они активны), либо просто грузим базу
+    if any([var_ring.get(), var_earrings.get(), var_bracelet.get(), var_chain.get(),
+            var_wedding.get(), var_woman.get(), var_man.get(), var_childish.get(),
+            var_gold.get(), var_redgold.get(), var_whitegold.get(), var_yellowgold.get(), var_serebro.get(),
+            var_no.get(), var_diamond.get(), var_sapphire.get(), var_ruby.get(), var_emerald.get(), var_cubic_zirconia.get()]):
+        update_filters()
+    else:
+        load_data_from_db()
+
+def reset_filters():
+    viborka.delete(0, tk.END)
+    for var in [var_ring, var_earrings, var_bracelet, var_chain, var_wedding, var_woman,
+               var_man, var_childish, var_gold, var_redgold, var_whitegold, var_yellowgold,
+               var_serebro, var_no, var_diamond, var_sapphire, var_ruby, var_emerald, var_cubic_zirconia]:
+        var.set(False)
+    # Если сортировка была, нужно ее сохранить при обновлении, поэтому вызываем update_filters
+    update_filters()
+
 def generate_five_digit_id():
     return random.randint(10000, 99999)
 
@@ -182,8 +262,9 @@ def add_item_to_db():
         "Камень": Entry_gemstone.get(),
         "Проба": Entry_purity.get(),
         "Вес": Entry_weight.get(),
-        "Цена": Entry_price.get(),
-        "Размер": Entry_size.get()
+        "Размер": Entry_size.get(),
+        "Количество": Entry_quantity.get(),
+        "Цена": Entry_price.get()
     }
 
     # Проверка на пустоту
@@ -198,16 +279,17 @@ def add_item_to_db():
         cursor = conn.cursor()
 
         # SQL запрос
-        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s, %s)", (
-            data["Название"],
-            data["Тип"],
-            data["Категория"],
-            data["Металл"],
-            data["Проба"],
-            data["Вес"],
-            data["Цена"],
-            data["Камень"],
-            data["Размер"]
+        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
+            Entry_name.get(),
+            Entry_type.get(),
+            Entry_category.get(),
+            Entry_metal.get(),
+            Entry_purity.get(),
+            Entry_weight.get(),
+            Entry_quantity.get(),  # Количество
+            Entry_price.get(),  # Цена
+            Entry_gemstone.get(),
+            Entry_size.get()
         ))
 
         conn.commit()
@@ -256,9 +338,8 @@ def search_data(event=None):
         if conn and conn.is_connected():
             cursor = conn.cursor()
             query = """
-                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, price, size 
-                FROM jewelry_items 
-                WHERE name LIKE %s
+                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
+                FROM jewelry_items
             """
             search_pattern = f"%{search}%"
             cursor.execute(query, (search_pattern,))
@@ -287,21 +368,21 @@ viborka.bind("<KeyRelease>",search_data)
 
 # Текущее правило сортировки (пусто по умолчанию)
 current_sort_clause = ""
+def buy_item():
+    selected_item = tree.selection()
+
+    if not selected_item:
+        messagebox.showwarning("Внимание", "Выберите изделия для покупки")
+        return
+    if not messagebox.askyesno("Покупка", "Вы уверены, что хотите купить изделие"):
+        return
+
 
 def set_sort(sort_clause):
     global current_sort_clause
     #Запоминаем выбор пользователя (например, "price ASC" или "name DESC")
     current_sort_clause = sort_clause
     update_filters()
-
-def reset_all():
-    for var in [var_ring,var_earrings, var_bracelet, var_chain,var_wedding,var_woman,var_man,var_childish,var_gold,var_redgold,var_whitegold,
-                var_yellowgold, var_serebro,var_no,var_diamond, var_sapphire,var_ruby,var_emerald,var_cubic_zirconia]:
-        var.set(False)
-
-    global current_sort_clause
-    current_sort_clause = ""
-    load_data_from_db()
 
 ##по типу
 var_ring = tk.BooleanVar()
@@ -329,6 +410,7 @@ var_sapphire= tk.BooleanVar()
 var_ruby= tk.BooleanVar()
 var_emerald= tk.BooleanVar()
 var_cubic_zirconia= tk.BooleanVar()
+
 def update_filters():
     # 1. Собираем списки выбора
     selected_types = []
@@ -459,6 +541,11 @@ stone_menu.add_checkbutton(label="Фианит", variable=var_cubic_zirconia, co
 #по размеру
 size_menu = tk.Menu(filter_menu, tearoff=0)
 filter_menu.add_cascade(label="По размеру", menu=size_menu)
+
+filter_menu.add_separator()
+filter_menu.add_command(label="Сбросить фильтры", command=reset_filters, foreground="red")
+
+
 #сортировки
 sort_menu = tk.Menu(Menu, tearoff=0)
 Menu.add_cascade(label="Сортировки", menu=sort_menu)
@@ -466,6 +553,20 @@ sort_menu.add_command(label="Сортировка от А до Я",command=lambd
 sort_menu.add_command(label="Сортировка от Я до А",command=lambda: set_sort("name DESC"))
 sort_menu.add_command(label="Сначала дешевые",command=lambda: set_sort("price ASC"))
 
+sort_menu.add_separator()
+sort_menu.add_command(label="Сбросить сортировку", command=reset_sorting,foreground="red")
 
-#размер
+delete = tk.Button(root, text="Удалить",bg="#2D6A4F", fg="white",width=25,command=delete_selected_item)
+delete.grid(row=1, column=0, padx=500, pady=10, sticky="w")
+
+otchet_menu = tk.Menu(Menu, tearoff=0)
+Menu.add_cascade(label="Отчеты", menu=otchet_menu)
+
+otchet_menu.add_checkbutton(label="1")
+
+
+#покупка
+buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white")
+buy.grid(row=1, column=0, padx=700, pady=10, sticky="w")
+
 root.mainloop()
