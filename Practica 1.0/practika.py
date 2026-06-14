@@ -649,7 +649,7 @@ otchet_menu = tk.Menu(Menu, tearoff=0)
 Menu.add_cascade(label="Отчеты", menu=otchet_menu)
 
 otchet_menu.add_checkbutton(label="1")
-
+otchet_menu.add_checkbutton(label="2")
 
 #покупка
 buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white",command=open_buy_window)
