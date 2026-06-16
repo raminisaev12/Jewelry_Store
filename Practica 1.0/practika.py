@@ -4,10 +4,11 @@ from PIL import Image, ImageTk
 import mysql.connector
 from tkinter import messagebox
 import random
-
-from pygments.styles.dracula import background
 from tkcalendar import DateEntry
-
+from docx import Document
+from docx.shared import Pt
+from tkinter import filedialog
+from docx.shared import Inches
 
 root = tk.Tk()
 root.title("Алмазный путь")
@@ -702,7 +703,50 @@ def new_window():
     btn4 = tk.Button(frame, text="Обновить", bg="#2D6A4F", fg="white", command=lambda: load_report_data())
     btn4.pack(side="left", padx=5)
 
-    btn3 = tk.Button(frame, text="Сохранить отчет", bg="#2D6A4F", fg="white")
+    # сохранение в ворд
+    def save():
+        all_data = []
+        for row_id in tree_report.get_children():
+            all_data.append(tree_report.item(row_id)["values"])
+
+        if not all_data:
+            messagebox.showwarning("Внимание", "Таблица пуста!")
+            return
+
+        doc = Document()
+        doc.add_heading("Отчет по продажам", 0)
+
+        table = doc.add_table(rows=1, cols=8)
+        table.style = "Table Grid"
+        table.autofit = False
+        table.allow_autofit = False
+
+        widths_in_inches = [0.8, 1.0, 0.8, 1.0, 0.4, 0.8, 0.9, 0.9]
+        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Кол-во', 'Цена', 'Оплата', 'Итого']
+
+        hdr_cells = table.rows[0].cells
+        for i, (h, w) in enumerate(zip(headers, widths_in_inches)):
+            hdr_cells[i].text = h
+            table.columns[i].width = Inches(w)
+
+        for row_values in all_data:
+            row_cells = table.add_row().cells
+            for i, val in enumerate(row_values):
+                row_cells[i].text = str(val)
+
+            # 3. Сохранение
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".docx",
+            filetypes=[("Word Document", "*.docx")]
+        )
+        if file_path:
+            try:
+                doc.save(file_path)
+                messagebox.showinfo("Успех", "Отчет успешно сохранен в Word!")
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
+
+    btn3 = tk.Button(frame, text="Сохранить отчет", bg="#2D6A4F", fg="white",command=save)
     btn3.pack(side="left", padx=5)
 
     # 2. Таблица
