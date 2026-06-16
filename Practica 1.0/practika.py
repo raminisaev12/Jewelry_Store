@@ -137,7 +137,7 @@ tree.heading('purity', text='Проба',anchor="center")
 tree.heading('weight', text='Вес (г)',anchor="center")
 tree.heading('size',text='Размер', anchor="center")
 tree.heading('quantity', text='Кол-во', anchor="center")
-tree.heading('price', text='Цена (₽)',anchor="center")
+tree.heading('price', text='Цена за шт. (₽)',anchor="center")
 for col in cols:
     tree.column(col,width=100,anchor="center")
 
@@ -443,12 +443,17 @@ def open_buy_window():
         if qty > available_qty:
             messagebox.showwarning("Мало товара", f"В наличии только {available_qty} шт.")
             return
-
+        current_total = qty * price_per_item
         try:
             numeric_id = item_data[0].split("-")[1]
             conn = connect_to_db()
             cursor = conn.cursor()
             cursor.execute("UPDATE jewelry_items SET quantity = quantity - %s WHERE id = %s", (qty, numeric_id))
+            cursor.execute("""
+                            INSERT INTO sales_history (seller_name, item_name, quantity_sold, price_per_item, payment_method, total_price) 
+                            VALUES (%s, %s, %s, %s, %s, %s)
+                        """, (combo_seller.get(), item_name, qty, price_per_item, payment_method.get(), current_total))
+
             conn.commit()
             conn.close()
             messagebox.showinfo("Успех",
@@ -645,14 +650,123 @@ sort_menu.add_command(label="Сбросить сортировку", command=res
 delete = tk.Button(root, text="Удалить",bg="#2D6A4F", fg="white",width=25,command=delete_selected_item)
 delete.grid(row=1, column=0, padx=500, pady=10, sticky="w")
 
-otchet_menu = tk.Menu(Menu, tearoff=0)
-Menu.add_cascade(label="Отчеты", menu=otchet_menu)
-
-otchet_menu.add_checkbutton(label="1")
-otchet_menu.add_checkbutton(label="2")
+inf_menu = tk.Menu(Menu, tearoff=0)
+Menu.add_cascade(label="Справочная информация", menu=inf_menu)
+inf_menu.add_command(label="Руководство пользователя")
+inf_menu.add_command(label="О программе")
+inf_menu.add_command(label="О разработчике")
 
 #покупка
 buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white",command=open_buy_window)
-buy.grid(row=1, column=0, padx=700, pady=10, sticky="w")
+buy.grid(row=1, column=0, padx=690, pady=10, sticky="w")
+
+#отчеты
+def new_window():
+    root2 = tk.Toplevel(root)
+    root2.title("Отчеты")
+    root2.geometry("500x500")
+    root2.state("zoomed")
+    root2.configure(bg=bg_color)
+
+    root2.columnconfigure(0, weight=1)
+    root2.rowconfigure(1, weight=1)
+
+    cols = ('id', 'date', 'seller', 'item', 'qty', 'price', 'payment', 'total')
+
+    tree_report = ttk.Treeview(root2, columns=cols, show='headings')
+
+    tree_report.heading('id', text="ID")
+    tree_report.heading('date', text="Дата")
+    tree_report.heading('seller', text="Продавец")
+    tree_report.heading('item', text="Товар")
+    tree_report.heading('qty', text="Кол-во")
+    tree_report.heading('price', text="Цена за шт. (руб)")
+    tree_report.heading('payment', text="Оплата")
+    tree_report.heading('total', text="Итого (руб)")
+
+    tree_report.column('id', width=50, anchor='center')
+    tree_report.column('date', width=50, anchor='center')
+    tree_report.column('seller', width=50, anchor='center')
+    tree_report.column('item', width=50, anchor='center')
+    tree_report.column('qty', width=50, anchor='center')
+    tree_report.column('price', width=50, anchor='center')
+    tree_report.column('payment', width=50, anchor='center')
+    tree_report.column('total', width=50, anchor='center')
+
+    tree_report.grid(row=1, column=0, sticky="nsew", padx=20, pady=(50, 20))
+
+    root2.columnconfigure(0, weight=1)
+    root2.rowconfigure(1, weight=1)
+    # Подгрузка данных
+    try:
+        conn = connect_to_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, sale_date, seller_name, item_name, quantity_sold, price_per_item, payment_method, total_price FROM sales_history ORDER BY sale_date DESC")
+        for row in cursor.fetchall():
+            tree_report.insert("", tk.END, values=row)
+        conn.close()
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Не удалось загрузить отчеты: {e}")
+
+    btn3 = tk.Button(root2, text="Сохранить отчет",bg="#2D6A4F", fg="white")
+    btn3.grid(row=0, column=0, padx=10, pady=10, sticky="n")
+    ######
+    Menu2 = tk.Menu(root2)
+    root2.config(menu=Menu2)
+
+    otchet_menu = tk.Menu(Menu2, tearoff=0)
+    Menu2.add_cascade(label="Отчеты", menu=otchet_menu)
+
+    otchet_menu.add_checkbutton(label="1")
+    otchet_menu.add_checkbutton(label="2")
+    #####
+    summ_frame = tk.Frame(root2,bg="#2D6A4F")
+    summ_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=10)
+
+    lbl_summ = tk.Label(summ_frame,text="",font=("Segoe UI", 12, "bold"),bg=bg_color,fg="#2D6A4F")
+    lbl_summ.pack(side="left")
+
+    def load_report_data():
+        for i in tree_report.get_children(): tree_report.delete(i)
+        try:
+            conn = connect_to_db()
+            cursor = conn.cursor()
+            # Используем JOIN, чтобы получить нужный ID формата АЛМ-1002
+            cursor.execute("""
+                SELECT 
+                    CONCAT(j.prefix, '-', j.id), 
+                    s.sale_date, 
+                    s.seller_name, 
+                    s.item_name, 
+                    s.quantity_sold, 
+                    s.price_per_item, 
+                    s.payment_method, 
+                    s.total_price 
+                FROM sales_history s
+                JOIN jewelry_items j ON s.item_name = j.name
+                ORDER BY s.sale_date DESC
+            """)
+            rows = cursor.fetchall()
+
+            total_sum = 0
+            total_items = 0
+
+            for row in rows:
+                tree_report.insert("", tk.END, values=row)
+                total_sum += row[7]
+                total_items += row[4]
+
+            lbl_summ.config(text=f"💰 Общая выручка: {total_sum:,.2f} руб. | 📦 Всего продано изделий: {total_items}")
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось загрузить отчеты: {e}")
+
+    load_report_data()
+
+    btn4 = tk.Button(root2, text="Обновить", bg="#2D6A4F", fg="white",command=load_report_data)
+    btn4.grid(row=0, column=0, padx=840, pady=10, sticky="w")
+
+btn2 = tk.Button(root, text ="Отчеты",bg="#2D6A4F", fg="white",width=20,command=new_window)
+btn2.grid(row=1, column=0, padx=790, pady=10, sticky="w")
 
 root.mainloop()
