@@ -5,6 +5,8 @@ import mysql.connector
 from tkinter import messagebox
 import random
 
+from pygments.styles.dracula import background
+from tkcalendar import DateEntry
 
 
 root = tk.Tk()
@@ -664,107 +666,89 @@ buy.grid(row=1, column=0, padx=690, pady=10, sticky="w")
 def new_window():
     root2 = tk.Toplevel(root)
     root2.title("Отчеты")
-    root2.geometry("500x500")
     root2.state("zoomed")
     root2.configure(bg=bg_color)
 
     root2.columnconfigure(0, weight=1)
     root2.rowconfigure(1, weight=1)
 
-    cols = ('id', 'date', 'seller', 'item', 'qty', 'price', 'payment', 'total')
+    # 1. Формирование отчета (фильтры)
+    frame = tk.Frame(root2, bg=bg_color)
+    frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
 
+    def keep_open(e):
+        e.widget.focus_force()
+
+    tk.Label(frame, text="С:", bg=bg_color).pack(side="left", padx=5)
+    date_from = DateEntry(frame, width=12, date_pattern='yyyy-mm-dd')
+    date_from.pack(side="left", padx=5)
+    # Используем привязку к событию нажатия кнопки мыши на виджет
+    date_from.bind("<Button-1>", keep_open, add="+")
+
+    tk.Label(frame, text="По:", bg=bg_color).pack(side="left", padx=5)
+    date_to = DateEntry(frame, width=12, date_pattern='yyyy-mm-dd')
+    date_to.pack(side="left", padx=5)
+    date_to.bind("<Button-1>", keep_open, add="+")
+
+    tk.Label(frame, text="Продавец:", bg=bg_color).pack(side="left", padx=5)
+    combo_seller = ttk.Combobox(frame, values=["Все", "Иванов И.И.", "Петров П.П."], state="readonly")
+    combo_seller.current(0)
+    combo_seller.pack(side="left", padx=5)
+
+    # Теперь все кнопки использую pack, а не grid
+    btn_apply = tk.Button(frame, text="Сформировать отчет", bg=text_color, fg="white")
+    btn_apply.pack(side="left", padx=10)
+
+    btn4 = tk.Button(frame, text="Обновить", bg="#2D6A4F", fg="white", command=lambda: load_report_data())
+    btn4.pack(side="left", padx=5)
+
+    btn3 = tk.Button(frame, text="Сохранить отчет", bg="#2D6A4F", fg="white")
+    btn3.pack(side="left", padx=5)
+
+    # 2. Таблица
+    cols = ('id', 'date', 'seller', 'item', 'qty', 'price', 'payment', 'total')
     tree_report = ttk.Treeview(root2, columns=cols, show='headings')
 
-    tree_report.heading('id', text="ID")
-    tree_report.heading('date', text="Дата")
-    tree_report.heading('seller', text="Продавец")
-    tree_report.heading('item', text="Товар")
-    tree_report.heading('qty', text="Кол-во")
-    tree_report.heading('price', text="Цена за шт. (руб)")
-    tree_report.heading('payment', text="Оплата")
-    tree_report.heading('total', text="Итого (руб)")
+    for col in cols:
+        tree_report.heading(col, text=col.capitalize())
+        tree_report.column(col, width=80, anchor='center')
 
-    tree_report.column('id', width=50, anchor='center')
-    tree_report.column('date', width=50, anchor='center')
-    tree_report.column('seller', width=50, anchor='center')
-    tree_report.column('item', width=50, anchor='center')
-    tree_report.column('qty', width=50, anchor='center')
-    tree_report.column('price', width=50, anchor='center')
-    tree_report.column('payment', width=50, anchor='center')
-    tree_report.column('total', width=50, anchor='center')
+    tree_report.grid(row=1, column=0, sticky="nsew", padx=20, pady=5)
 
-    tree_report.grid(row=1, column=0, sticky="nsew", padx=20, pady=(50, 20))
-
-    root2.columnconfigure(0, weight=1)
-    root2.rowconfigure(1, weight=1)
-    # Подгрузка данных
-    try:
-        conn = connect_to_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, sale_date, seller_name, item_name, quantity_sold, price_per_item, payment_method, total_price FROM sales_history ORDER BY sale_date DESC")
-        for row in cursor.fetchall():
-            tree_report.insert("", tk.END, values=row)
-        conn.close()
-    except Exception as e:
-        messagebox.showerror("Ошибка", f"Не удалось загрузить отчеты: {e}")
-
-    btn3 = tk.Button(root2, text="Сохранить отчет",bg="#2D6A4F", fg="white")
-    btn3.grid(row=0, column=0, padx=10, pady=10, sticky="n")
-    ######
-    Menu2 = tk.Menu(root2)
-    root2.config(menu=Menu2)
-
-    otchet_menu = tk.Menu(Menu2, tearoff=0)
-    Menu2.add_cascade(label="Отчеты", menu=otchet_menu)
-
-    otchet_menu.add_checkbutton(label="1")
-    otchet_menu.add_checkbutton(label="2")
-    #####
-    summ_frame = tk.Frame(root2,bg="#2D6A4F")
+    # 3. Итоги
+    summ_frame = tk.Frame(root2, bg="#2D6A4F")
     summ_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=10)
 
-    lbl_summ = tk.Label(summ_frame,text="",font=("Segoe UI", 12, "bold"),bg=bg_color,fg="#2D6A4F")
-    lbl_summ.pack(side="left")
+    lbl_summ = tk.Label(summ_frame, text="", font=("Segoe UI", 12, "bold"), bg="#2D6A4F", fg="white")
+    lbl_summ.pack(side="left", padx=10)
 
     def load_report_data():
         for i in tree_report.get_children(): tree_report.delete(i)
         try:
             conn = connect_to_db()
             cursor = conn.cursor()
-            # Используем JOIN, чтобы получить нужный ID формата АЛМ-1002
             cursor.execute("""
-                SELECT 
-                    CONCAT(j.prefix, '-', j.id), 
-                    s.sale_date, 
-                    s.seller_name, 
-                    s.item_name, 
-                    s.quantity_sold, 
-                    s.price_per_item, 
-                    s.payment_method, 
-                    s.total_price 
+                SELECT CONCAT(j.prefix, '-', j.id), s.sale_date, s.seller_name, s.item_name, 
+                       s.quantity_sold, s.price_per_item, s.payment_method, s.total_price 
                 FROM sales_history s
                 JOIN jewelry_items j ON s.item_name = j.name
                 ORDER BY s.sale_date DESC
             """)
             rows = cursor.fetchall()
-
             total_sum = 0
             total_items = 0
-
             for row in rows:
                 tree_report.insert("", tk.END, values=row)
                 total_sum += row[7]
                 total_items += row[4]
-
-            lbl_summ.config(text=f"💰 Общая выручка: {total_sum:,.2f} руб. | 📦 Всего продано изделий: {total_items}")
+            lbl_summ.config(text=f"💰 Общая выручка: {total_sum:,.2f} руб. | 📦 Всего продано: {total_items}")
             conn.close()
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось загрузить отчеты: {e}")
 
     load_report_data()
 
-    btn4 = tk.Button(root2, text="Обновить", bg="#2D6A4F", fg="white",command=load_report_data)
-    btn4.grid(row=0, column=0, padx=840, pady=10, sticky="w")
+
 
 btn2 = tk.Button(root, text ="Отчеты",bg="#2D6A4F", fg="white",width=20,command=new_window)
 btn2.grid(row=1, column=0, padx=790, pady=10, sticky="w")
