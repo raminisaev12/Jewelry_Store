@@ -229,28 +229,6 @@ def delete_selected_item():
         if conn and conn.is_connected():
             conn.close()
 
-
-def reset_sorting():
-    global current_sort_clause
-    current_sort_clause = ""
-    # Обновляем либо через фильтры (если они активны), либо просто грузим базу
-    if any([var_ring.get(), var_earrings.get(), var_bracelet.get(), var_chain.get(),
-            var_wedding.get(), var_woman.get(), var_man.get(), var_childish.get(),
-            var_gold.get(), var_redgold.get(), var_whitegold.get(), var_yellowgold.get(), var_serebro.get(),
-            var_no.get(), var_diamond.get(), var_sapphire.get(), var_ruby.get(), var_emerald.get(), var_cubic_zirconia.get()]):
-        update_filters()
-    else:
-        load_data_from_db()
-
-def reset_filters():
-    viborka.delete(0, tk.END)
-    for var in [var_ring, var_earrings, var_bracelet, var_chain, var_wedding, var_woman,
-               var_man, var_childish, var_gold, var_redgold, var_whitegold, var_yellowgold,
-               var_serebro, var_no, var_diamond, var_sapphire, var_ruby, var_emerald, var_cubic_zirconia]:
-        var.set(False)
-    # Если сортировка была, нужно ее сохранить при обновлении, поэтому вызываем update_filters
-    update_filters()
-
 def generate_five_digit_id():
     return random.randint(10000, 99999)
 
@@ -341,7 +319,7 @@ def search_data(event=None):
         if conn and conn.is_connected():
             cursor = conn.cursor()
 
-            # ДОБАВЛЯЕМ УСЛОВИЕ WHERE name LIKE %s
+
             query = """
                 SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
                 FROM jewelry_items 
@@ -349,7 +327,7 @@ def search_data(event=None):
             """
             search_pattern = f"%{search}%"
 
-            # Передаем параметр в execute
+
             cursor.execute(query, (search_pattern,))
 
             rows = cursor.fetchall()
@@ -377,7 +355,6 @@ viborka.bind("<KeyRelease>",search_data)
 
 update = tk.Button(root, text="Нажмите для обновления данных",width=30,bg=text_color,fg="white",command=load_data_from_db)
 update.grid(row=1, column=0, padx=275, pady=10, sticky="w")
-# Текущее правило сортировки (пусто по умолчанию)
 current_sort_clause = ""
 
 
@@ -471,95 +448,147 @@ def open_buy_window():
 
 def set_sort(sort_clause):
     global current_sort_clause
-    #Запоминаем выбор пользователя (например, "price ASC" или "name DESC")
     current_sort_clause = sort_clause
     update_filters()
 
-##по типу
-var_ring = tk.BooleanVar()
-var_earrings = tk.BooleanVar()
-var_bracelet = tk.BooleanVar()
-var_chain = tk.BooleanVar()
 
-#по категории
-var_wedding = tk.BooleanVar()
-var_woman= tk.BooleanVar()
-var_man= tk.BooleanVar()
-var_childish= tk.BooleanVar()
+def get_distinct_values(column):
+    """Возвращает список уникальных значений из таблицы jewelry_items для столбца column."""
+    conn = connect_to_db()
+    if not conn:
+        return []
+    try:
+        cursor = conn.cursor()
+        # Исключаем NULL и пустые строки
+        cursor.execute(f"SELECT DISTINCT {column} FROM jewelry_items WHERE {column} IS NOT NULL AND {column} != '' ORDER BY {column}")
+        rows = cursor.fetchall()
+        return [r[0] for r in rows]
+    except Exception as e:
+        print(f"Ошибка получения значений для {column}: {e}")
+        return []
+    finally:
+        conn.close()
 
-#по металлу
-var_gold= tk.BooleanVar()
-var_redgold= tk.BooleanVar()
-var_whitegold= tk.BooleanVar()
-var_yellowgold= tk.BooleanVar()
-var_serebro= tk.BooleanVar()
+# Словарь для хранения BooleanVar по всем полям (кроме id)
+filter_vars = {
+    "name": {},
+    "type": {},
+    "category": {},
+    "metal": {},
+    "gemstone": {},
+    "size": {},
+    "purity": {},
+    "weight": {},
+    "quantity": {},
+    "price": {}
+}
 
-#по камням
-var_no= tk.BooleanVar()
-var_diamond= tk.BooleanVar()
-var_sapphire= tk.BooleanVar()
-var_ruby= tk.BooleanVar()
-var_emerald= tk.BooleanVar()
-var_cubic_zirconia= tk.BooleanVar()
+# Функция обновления конкретного подменю
+def refresh_menu(menu, category, column):
+    """Удаляет старые пункты меню и создает новые checkbutton'ы на основе данных из БД."""
+    menu.delete(0, tk.END)   # очищаем меню
+    values = get_distinct_values(column)
+    # Очищаем старые переменные
+    filter_vars[category].clear()
+    for val in values:
+        var = tk.BooleanVar()
+        filter_vars[category][val] = var
+        menu.add_checkbutton(label=val, variable=var, command=update_filters)
+
+# Пост-команды для каждого подменю
+def refresh_name_menu():
+    refresh_menu(name_menu, "name", "name")
+
+def refresh_type_menu():
+    refresh_menu(type_menu, "type", "type")
+
+def refresh_category_menu():
+    refresh_menu(cat_menu, "category", "category")
+
+def refresh_metal_menu():
+    refresh_menu(metal_menu, "metal", "metal")
+
+def refresh_stone_menu():
+    refresh_menu(stone_menu, "gemstone", "gemstone")
+
+def refresh_size_menu():
+    refresh_menu(size_menu, "size", "size")
+
+def refresh_purity_menu():
+    refresh_menu(purity_menu, "purity", "purity")
+
+def refresh_weight_menu():
+    refresh_menu(weight_menu, "weight", "weight")
+
+def refresh_quantity_menu():
+    refresh_menu(quantity_menu, "quantity", "quantity")
+
+def refresh_price_menu():
+    refresh_menu(price_menu, "price", "price")
 
 def update_filters():
-    # 1. Собираем списки выбора
-    selected_types = []
-    if var_ring.get(): selected_types.append("Кольцо")
-    if var_earrings.get(): selected_types.append("Серьги")
-    if var_bracelet.get(): selected_types.append("Браслет")
-    if var_chain.get(): selected_types.append("Цепочка")
-
-    selected_categories = []
-    if var_wedding.get(): selected_categories.append("Свадебные")
-    if var_woman.get(): selected_categories.append("Женские")
-    if var_man.get(): selected_categories.append("Мужские")
-    if var_childish.get(): selected_categories.append("Детские")
-
-    selected_metal = []
-    if var_gold.get(): selected_metal.append("Золото")
-    if var_redgold.get(): selected_metal.append("Красное золото")
-    if var_whitegold.get(): selected_metal.append("Белое золото")
-    if var_yellowgold.get(): selected_metal.append("Желтое золото")
-    if var_serebro.get(): selected_metal.append("Серебро")
-
-    selected_gemstone = []
-    if var_no.get(): selected_gemstone.append("Нет")
-    if var_diamond.get(): selected_gemstone.append("Бриллиант")
-    if var_sapphire.get(): selected_gemstone.append("Сапфир")
-    if var_ruby.get(): selected_gemstone.append("Рубин")
-    if var_emerald.get(): selected_gemstone.append("Изумруд")
-    if var_cubic_zirconia .get(): selected_gemstone.append("Фианит")
+    # 1. Собираем списки выбора из динамических переменных
+    selected_names = [val for val, var in filter_vars["name"].items() if var.get()]
+    selected_types = [val for val, var in filter_vars["type"].items() if var.get()]
+    selected_categories = [val for val, var in filter_vars["category"].items() if var.get()]
+    selected_metal = [val for val, var in filter_vars["metal"].items() if var.get()]
+    selected_gemstone = [val for val, var in filter_vars["gemstone"].items() if var.get()]
+    selected_sizes = [val for val, var in filter_vars["size"].items() if var.get()]
+    selected_purities = [val for val, var in filter_vars["purity"].items() if var.get()]
+    selected_weights = [val for val, var in filter_vars["weight"].items() if var.get()]
+    selected_quantities = [val for val, var in filter_vars["quantity"].items() if var.get()]
+    selected_prices = [val for val, var in filter_vars["price"].items() if var.get()]
 
     # 2. Формируем запрос
     query = """
     SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
     FROM jewelry_items 
     WHERE 1=1
-"""
+    """
     params = []
 
+    if selected_names:
+        placeholders = ', '.join(['%s'] * len(selected_names))
+        query += f" AND name IN ({placeholders})"
+        params.extend(selected_names)
     if selected_types:
         placeholders = ', '.join(['%s'] * len(selected_types))
         query += f" AND type IN ({placeholders})"
         params.extend(selected_types)
-
     if selected_categories:
         placeholders = ', '.join(['%s'] * len(selected_categories))
         query += f" AND category IN ({placeholders})"
         params.extend(selected_categories)
-
     if selected_metal:
         placeholders = ', '.join(['%s'] * len(selected_metal))
         query += f" AND metal IN ({placeholders})"
         params.extend(selected_metal)
-
     if selected_gemstone:
         placeholders = ', '.join(['%s'] * len(selected_gemstone))
         query += f" AND gemstone IN ({placeholders})"
         params.extend(selected_gemstone)
+    if selected_sizes:
+        placeholders = ', '.join(['%s'] * len(selected_sizes))
+        query += f" AND size IN ({placeholders})"
+        params.extend(selected_sizes)
+    if selected_purities:
+        placeholders = ', '.join(['%s'] * len(selected_purities))
+        query += f" AND purity IN ({placeholders})"
+        params.extend(selected_purities)
+    if selected_weights:
+        placeholders = ', '.join(['%s'] * len(selected_weights))
+        query += f" AND weight IN ({placeholders})"
+        params.extend(selected_weights)
+    if selected_quantities:
+        placeholders = ', '.join(['%s'] * len(selected_quantities))
+        query += f" AND quantity IN ({placeholders})"
+        params.extend(selected_quantities)
+    if selected_prices:
+        placeholders = ', '.join(['%s'] * len(selected_prices))
+        query += f" AND price IN ({placeholders})"
+        params.extend(selected_prices)
 
-    #ДОБАВЛЯЕМ СОРТИРОВКУ
+    # Сортировка
     if current_sort_clause:
         query += f" ORDER BY {current_sort_clause}"
 
@@ -569,11 +598,9 @@ def update_filters():
         conn = connect_to_db()
         if conn and conn.is_connected():
             cursor = conn.cursor()
-
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
 
-            # Очищаем и обновляем
             for item in tree.get_children():
                 tree.delete(item)
             for row in rows:
@@ -585,58 +612,58 @@ def update_filters():
         if conn and conn.is_connected():
             conn.close()
 
-#меню
-#фильтры
+def reset_filters():
+    viborka.delete(0, tk.END)
+    for cat_dict in filter_vars.values():
+        for var in cat_dict.values():
+            var.set(False)
+    update_filters()
+
+
+def reset_sorting():
+    global current_sort_clause
+    current_sort_clause = ""
+    update_filters()
+
+# ====== МЕНЮ ======
 Menu = tk.Menu(root)
 root.config(menu=Menu)
 
-filter_menu = tk.Menu(Menu, tearoff=0,fg=text_color)
+filter_menu = tk.Menu(Menu, tearoff=0, fg=text_color)
 Menu.add_cascade(label="Фильтры", menu=filter_menu)
 
-filter_menu2 = tk.Menu(filter_menu, tearoff=0)
-filter_menu.add_cascade(label="Название изделия", menu=filter_menu2)
+# Подменю с динамическим наполнением
+name_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_name_menu)
+filter_menu.add_cascade(label="По названию", menu=name_menu)
 
-#по типу
-type_menu = tk.Menu(filter_menu, tearoff=0)
+type_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_type_menu)
 filter_menu.add_cascade(label="По типу", menu=type_menu)
 
-type_menu.add_checkbutton(label="Кольцо", variable=var_ring, command=update_filters)
-type_menu.add_checkbutton(label="Серьги", variable=var_earrings, command=update_filters)
-type_menu.add_checkbutton(label="Браслет", variable=var_bracelet, command=update_filters)
-type_menu.add_checkbutton(label="Цепочка", variable=var_chain, command=update_filters)
-
-#категория
-cat_menu = tk.Menu(filter_menu, tearoff=0)
+cat_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_category_menu)
 filter_menu.add_cascade(label="По категории", menu=cat_menu)
 
-cat_menu.add_checkbutton(label="Свадебные", variable=var_wedding, command=update_filters)
-cat_menu.add_checkbutton(label="Женские", variable=var_woman, command=update_filters)
-cat_menu.add_checkbutton(label="Мужские", variable=var_man, command=update_filters)
-cat_menu.add_checkbutton(label="Детские", variable=var_childish, command=update_filters)
-
-#по металлу
-metal_menu = tk.Menu(filter_menu, tearoff=0)
+metal_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_metal_menu)
 filter_menu.add_cascade(label="По металлу", menu=metal_menu)
 
-metal_menu.add_checkbutton(label="Золото", variable=var_gold, command=update_filters)
-metal_menu.add_checkbutton(label="Красное золото", variable=var_redgold, command=update_filters)
-metal_menu.add_checkbutton(label="Белое золото", variable=var_whitegold, command=update_filters)
-metal_menu.add_checkbutton(label="Желтое золото", variable=var_yellowgold, command=update_filters)
-metal_menu.add_checkbutton(label="Серебро", variable=var_serebro, command=update_filters)
-#по камню
-stone_menu = tk.Menu(filter_menu, tearoff=0)
+stone_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_stone_menu)
 filter_menu.add_cascade(label="По камню", menu=stone_menu)
 
-stone_menu.add_checkbutton(label="Нет", variable=var_no, command=update_filters)
-stone_menu.add_checkbutton(label="Бриллиант", variable=var_diamond, command=update_filters)
-stone_menu.add_checkbutton(label="Сапфир", variable=var_sapphire, command=update_filters)
-stone_menu.add_checkbutton(label="Рубин", variable=var_ruby, command=update_filters)
-stone_menu.add_checkbutton(label="Изумруд", variable=var_emerald, command=update_filters)
-stone_menu.add_checkbutton(label="Фианит", variable=var_cubic_zirconia, command=update_filters)
-#по размеру
-size_menu = tk.Menu(filter_menu, tearoff=0)
+size_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_size_menu)
 filter_menu.add_cascade(label="По размеру", menu=size_menu)
 
+purity_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_purity_menu)
+filter_menu.add_cascade(label="По пробе", menu=purity_menu)
+
+weight_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_weight_menu)
+filter_menu.add_cascade(label="По весу", menu=weight_menu)
+
+quantity_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_quantity_menu)
+filter_menu.add_cascade(label="По количеству", menu=quantity_menu)
+
+price_menu = tk.Menu(filter_menu, tearoff=0, postcommand=refresh_price_menu)
+filter_menu.add_cascade(label="По цене", menu=price_menu)
+
+# Кнопка сброса фильтров
 filter_menu.add_separator()
 filter_menu.add_command(label="Сбросить фильтры", command=reset_filters, foreground="red")
 
