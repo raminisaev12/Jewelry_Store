@@ -669,39 +669,165 @@ def new_window():
     root2.title("Отчеты")
     root2.state("zoomed")
     root2.configure(bg=bg_color)
-
     root2.columnconfigure(0, weight=1)
     root2.rowconfigure(1, weight=1)
 
-    # 1. Формирование отчета (фильтры)
+    # Панель фильтров
     frame = tk.Frame(root2, bg=bg_color)
     frame.grid(row=0, column=0, sticky="ew", padx=20, pady=10)
 
-    def keep_open(e):
-        e.widget.focus_force()
 
+    def create_filter_combo(parent, label_text, values):
+        tk.Label(parent, text=label_text, bg=bg_color).pack(side="left", padx=(10, 5))
+        combo = ttk.Combobox(parent, values=values, state="readonly", width=15)
+        combo.pack(side="left", padx=5)
+        return combo
+
+    # Дата и Продавец
     tk.Label(frame, text="С:", bg=bg_color).pack(side="left", padx=5)
-    date_from = DateEntry(frame, width=12, date_pattern='yyyy-mm-dd')
+    date_from = DateEntry(frame, width=10, date_pattern='yyyy-mm-dd')
     date_from.pack(side="left", padx=5)
-    # Используем привязку к событию нажатия кнопки мыши на виджет
-    date_from.bind("<Button-1>", keep_open, add="+")
 
     tk.Label(frame, text="По:", bg=bg_color).pack(side="left", padx=5)
-    date_to = DateEntry(frame, width=12, date_pattern='yyyy-mm-dd')
+    date_to = DateEntry(frame, width=10, date_pattern='yyyy-mm-dd')
     date_to.pack(side="left", padx=5)
-    date_to.bind("<Button-1>", keep_open, add="+")
 
     tk.Label(frame, text="Продавец:", bg=bg_color).pack(side="left", padx=5)
-    combo_seller = ttk.Combobox(frame, values=["Все", "Иванов И.И.", "Петров П.П."], state="readonly")
-    combo_seller.current(0)
+    combo_seller = ttk.Combobox(frame, values=["Иванов И.И.", "Петров П.П.", "Сидорова А.А."], state="readonly",width=15)
+    combo_seller.set("— Все —")
     combo_seller.pack(side="left", padx=5)
 
-    # Теперь все кнопки использую pack, а не grid
-    btn_apply = tk.Button(frame, text="Сформировать отчет", bg=text_color, fg="white")
-    btn_apply.pack(side="left", padx=10)
+    # Категории и Материалы
+    po_kat = create_filter_combo(frame, "Категория:", ["Свадебные", "Женские", "Мужские", "Детские"])
+    po_mat = create_filter_combo(frame, "Материал:",
+                                 ["Золото", "Красное золото", "Белое золото", "Желтое золото", "Серебро"])
+    #популярность
+    def load_popular_data():
+        start_date = date_from.get()
+        end_date = date_to.get()
+        for i in tree_report.get_children(): tree_report.delete(i)
 
-    btn4 = tk.Button(frame, text="Обновить", bg="#2D6A4F", fg="white", command=lambda: load_report_data())
-    btn4.pack(side="left", padx=5)
+        try:
+            conn = connect_to_db()
+            cursor = conn.cursor(dictionary=True)
+
+            # Группируем по уникальному ID изделия, чтобы база не выдавала ошибку 1055
+            query = """
+                            SELECT 
+                                CONCAT(MAX(j.prefix), '-', MIN(j.id)) as full_id, 
+                                DATE_FORMAT(MAX(s.sale_date), '%Y-%m-%d') as sale_date,  -- Вот здесь магия
+                                '—' as seller_name, 
+                                s.item_name, 
+                                j.metal, 
+                                j.category, 
+                                SUM(s.quantity_sold) as total_qty, 
+                                AVG(s.price_per_item) as price, 
+                                '—' as payment_method, 
+                                SUM(s.total_price) as total_price
+                            FROM sales_history s
+                            JOIN jewelry_items j ON s.item_name = j.name
+                            WHERE DATE(s.sale_date) BETWEEN %s AND %s
+                            GROUP BY j.id, s.item_name, j.metal, j.category
+                            ORDER BY total_qty DESC
+                        """
+            cursor.execute(query, (start_date, end_date))
+            rows = cursor.fetchall()
+
+            total_sum = 0
+            total_qty = 0
+
+            for row in rows:
+                tree_report.insert("", tk.END, values=(
+                    row['full_id'],
+                    row['sale_date'],
+                    row['seller_name'],
+                    row['item_name'],
+                    row['metal'] or "—",
+                    row['category'] or "—",
+                    row['total_qty'],
+                    f"{row['price']:.2f}",
+                    row['payment_method'],
+                    f"{row['total_price']:.2f}"
+                ))
+                total_sum += row['total_price']
+                total_qty += row['total_qty']
+            lbl_summ.config(text=f"💰 Выручка: {total_sum:,.2f} руб. | 📦 Всего: {total_qty} шт.")
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка БД: {e}")
+
+    # Кнопки
+    po_pop = tk.Button(frame, text="По популярности", bg="#2D6A4F", fg="white",command=load_popular_data)
+    po_pop.pack(side="left", padx=10)
+
+    btn_apply = tk.Button(frame, text="Обновить", bg=text_color, fg="white", command=lambda: load_report_data())
+    btn_apply.pack(side="left", padx=5)
+
+    btn_save = tk.Button(frame, text="Сохранить в Word", bg="#2D6A4F", fg="white", command=lambda: save())
+    btn_save.pack(side="left", padx=5)
+
+    # Таблица
+    cols = ('ID', 'Дата', 'Продавец', 'Товар','Материал', 'Категория','Кол-во проданных', 'Цена', 'Оплата',"Итого")
+    tree_report = ttk.Treeview(root2, columns=cols, show='headings')
+    for col in cols:
+        tree_report.heading(col, text=col)
+        tree_report.column(col, width=80, anchor='center')
+    tree_report.grid(row=1, column=0, sticky="nsew", padx=20, pady=5)
+
+    # Инфо-панель
+    summ_frame = tk.Frame(root2, bg="#2D6A4F")
+    summ_frame.grid(row=2, column=0, sticky="ew", padx=20, pady=10)
+    lbl_summ = tk.Label(summ_frame, text="Загрузка данных...", font=("Segoe UI", 12, "bold"), bg="#2D6A4F", fg="white")
+    lbl_summ.pack(pady=10)
+
+    # Логика загрузки
+    def load_report_data():
+        for i in tree_report.get_children(): tree_report.delete(i)
+        try:
+            conn = connect_to_db()
+            cursor = conn.cursor(dictionary=True)
+
+            # Используем CONCAT с ID изделия (j.id)
+            query = """
+                SELECT 
+                    CONCAT(j.prefix, '-', j.id) as full_id, 
+                    s.sale_date, s.seller_name, s.item_name, 
+                    j.metal, j.category, 
+                    s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
+                FROM sales_history s
+                LEFT JOIN jewelry_items j ON s.item_name = j.name
+            """
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+            total_sum = 0
+            total_qty = 0
+
+            for row in rows:
+                tree_report.insert("", tk.END, values=(
+                    row['full_id'],
+                    row['sale_date'],
+                    row['seller_name'],
+                    row['item_name'],
+                    row['metal'] or "—",
+                    row['category'] or "—",
+                    row['quantity_sold'],
+                    row['price_per_item'],
+                    row['payment_method'],
+                    row['total_price']
+                ))
+                total_sum += row['total_price']
+                total_qty += row['quantity_sold']
+
+            lbl_summ.config(text=f"💰 Выручка: {total_sum:,.2f} руб. | 📦 Всего: {total_qty} шт.")
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка БД: {e}")
+
+    # При выборе в комбобоксах — сразу обновляем отчет
+    po_kat.bind("<<ComboboxSelected>>", lambda e: load_report_data())
+    po_mat.bind("<<ComboboxSelected>>", lambda e: load_report_data())
+    combo_seller.bind("<<ComboboxSelected>>", lambda e: load_report_data())
 
     # сохранение в ворд
     def save():
@@ -713,28 +839,35 @@ def new_window():
             messagebox.showwarning("Внимание", "Таблица пуста!")
             return
 
+        from docx.enum.section import WD_ORIENT
+        from docx.shared import Cm
+
         doc = Document()
+
+        # 1. Меняем ориентацию страницы на альбомную
+        section = doc.sections[0]
+        new_width, new_height = section.page_height, section.page_width
+        section.orientation = WD_ORIENT.LANDSCAPE
+        section.page_width = new_width
+        section.page_height = new_height
+
         doc.add_heading("Отчет по продажам", 0)
 
-        table = doc.add_table(rows=1, cols=8)
+        # 2. Создаем таблицу (10 столбцов)
+        table = doc.add_table(rows=1, cols=10)
         table.style = "Table Grid"
-        table.autofit = False
-        table.allow_autofit = False
 
-        widths_in_inches = [0.8, 1.0, 0.8, 1.0, 0.4, 0.8, 0.9, 0.9]
-        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Кол-во', 'Цена', 'Оплата', 'Итого']
+        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Материал', 'Категория', 'Кол-во проданных', 'Цена', 'Оплата', "Итого"]
 
         hdr_cells = table.rows[0].cells
-        for i, (h, w) in enumerate(zip(headers, widths_in_inches)):
+        for i, h in enumerate(headers):
             hdr_cells[i].text = h
-            table.columns[i].width = Inches(w)
 
         for row_values in all_data:
             row_cells = table.add_row().cells
             for i, val in enumerate(row_values):
                 row_cells[i].text = str(val)
 
-            # 3. Сохранение
         file_path = filedialog.asksaveasfilename(
             defaultextension=".docx",
             filetypes=[("Word Document", "*.docx")]
@@ -742,22 +875,9 @@ def new_window():
         if file_path:
             try:
                 doc.save(file_path)
-                messagebox.showinfo("Успех", "Отчет успешно сохранен в Word!")
+                messagebox.showinfo("Успех", "Отчет успешно сохранен в альбомном формате!")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
-
-    btn3 = tk.Button(frame, text="Сохранить отчет", bg="#2D6A4F", fg="white",command=save)
-    btn3.pack(side="left", padx=5)
-
-    # 2. Таблица
-    cols = ('id', 'date', 'seller', 'item', 'qty', 'price', 'payment', 'total')
-    tree_report = ttk.Treeview(root2, columns=cols, show='headings')
-
-    for col in cols:
-        tree_report.heading(col, text=col.capitalize())
-        tree_report.column(col, width=80, anchor='center')
-
-    tree_report.grid(row=1, column=0, sticky="nsew", padx=20, pady=5)
 
     # 3. Итоги
     summ_frame = tk.Frame(root2, bg="#2D6A4F")
@@ -765,30 +885,6 @@ def new_window():
 
     lbl_summ = tk.Label(summ_frame, text="", font=("Segoe UI", 12, "bold"), bg="#2D6A4F", fg="white")
     lbl_summ.pack(side="left", padx=10)
-
-    def load_report_data():
-        for i in tree_report.get_children(): tree_report.delete(i)
-        try:
-            conn = connect_to_db()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT CONCAT(j.prefix, '-', j.id), s.sale_date, s.seller_name, s.item_name, 
-                       s.quantity_sold, s.price_per_item, s.payment_method, s.total_price 
-                FROM sales_history s
-                JOIN jewelry_items j ON s.item_name = j.name
-                ORDER BY s.sale_date DESC
-            """)
-            rows = cursor.fetchall()
-            total_sum = 0
-            total_items = 0
-            for row in rows:
-                tree_report.insert("", tk.END, values=row)
-                total_sum += row[7]
-                total_items += row[4]
-            lbl_summ.config(text=f"💰 Общая выручка: {total_sum:,.2f} руб. | 📦 Всего продано: {total_items}")
-            conn.close()
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Не удалось загрузить отчеты: {e}")
 
     load_report_data()
 
