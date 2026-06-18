@@ -20,8 +20,8 @@ root.columnconfigure(0, weight=1)
 root.columnconfigure(1, weight=1)
 root.rowconfigure(2, weight=1)
 
-l =Image.open("logo2.png")
-l  = ImageTk.PhotoImage(l)
+l=Image.open("logo2.png")
+l= ImageTk.PhotoImage(l)
 
 root.iconphoto(True, l)
 
@@ -157,7 +157,7 @@ def update_size_options(event):
         Entry_size.set("—")
 
 Entry_type.bind("<<ComboboxSelected>>", update_size_options)
-####скелет
+#скелет
 cols = ('id', 'name', 'type', 'category', 'metal', 'gemstone', 'purity', 'weight', 'size', 'quantity', 'price')
 
 tree = ttk.Treeview(root, columns=cols, show='headings',height=12)
