@@ -9,6 +9,8 @@ from docx import Document
 from docx.shared import Pt
 from tkinter import filedialog
 from docx.shared import Inches
+from datetime import date
+
 
 root = tk.Tk()
 root.title("Алмазный путь")
@@ -61,7 +63,6 @@ for i in range(6):
 ####
 def create_field(label_text, row_idx, col_idx):
     lbl = tk.Label(border_frame, text=label_text, bg=bg_color, fg=text_color)
-    # Используем row_idx вместо жесткой единицы
     lbl.grid(row=row_idx, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
 
     ent = tk.Entry(border_frame, bg="white", relief="flat", highlightthickness=1, highlightbackground="#A0A0A0")
@@ -70,25 +71,56 @@ def create_field(label_text, row_idx, col_idx):
 
 def create_combobox(label_text, row_idx, col_idx, values_list):
     lbl = tk.Label(border_frame, text=label_text, bg=bg_color, fg=text_color)
-    # Используем row_idx вместо жесткой единицы
     lbl.grid(row=row_idx, column=col_idx * 2, padx=(10, 5), pady=10, sticky="ew")
 
     combobox = ttk.Combobox(border_frame, values=values_list, state="readonly")
     combobox.grid(row=row_idx, column=col_idx * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
     return combobox
 
+def on_validate_text(new_value):
+    """Разрешены буквы, пробел, дефис"""
+    return all(c.isalpha() or c in (' ', '-') for c in new_value) if new_value else True
+
+def on_validate_int(new_value):
+    """Только цифры (целое неотрицательное)"""
+    return new_value.isdigit() or new_value == ""
+
+def on_validate_float(new_value):
+    """Число с плавающей точкой (точка или запятая)"""
+    if new_value == "":
+        return True
+    try:
+        float(new_value.replace(',', '.'))
+        return True
+    except ValueError:
+        return False
+
+# Регистрируем функции в root
+v_text = root.register(on_validate_text)
+v_int = root.register(on_validate_int)
+v_float = root.register(on_validate_float)
+
+
 # Создаем поля по порядку
 Entry_name = create_field("Название изделия", 1, 0)
+Entry_name.config(validate="key", validatecommand=(v_text, '%P'))   #буквы/пробел/дефис
+
 Entry_type = create_combobox("Тип", 1, 1, ["Кольцо", "Серьги", "Браслет", "Цепочка"])
 Entry_category = create_combobox("Категория", 1, 2, ["Свадебные", "Женские", "Мужские", "Детские"])
 Entry_metal = create_combobox("Металл", 1, 3, ["Золото", "Красное золото", "Белое золото", "Желтое золото", "Серебро"])
 Entry_gemstone = create_combobox("Камень", 1, 4, ["Нет", "Бриллиант", "Сапфир", "Рубин", "Изумруд", "Фианит"])
 
-Entry_purity = create_field("Проба", 2, 0)
+Entry_purity = create_combobox("Проба", 2, 0, ["375", "500", "585", "750", "925", "958", "999"])
+
 Entry_weight = create_field("Вес (г)", 2, 1)
+Entry_weight.config(validate="key", validatecommand=(v_float, '%P')) # число с точкой/запятой
+
 Entry_price = create_field("Цена (₽)", 2, 2)
+Entry_price.config(validate="key", validatecommand=(v_float, '%P'))  #число
+
 Entry_size = create_combobox("Размер", 2, 3, ["15", "15.5", "16", "16.5", "17", "17.5", "18"])
 Entry_quantity = create_field("Количество", 2, 4)
+Entry_quantity.config(validate="key", validatecommand=(v_int, '%P'))
 
 lbl_size = tk.Label(border_frame, text="Размер", bg=bg_color, fg=text_color)
 lbl_size.grid(row=2, column=3 * 2, padx=(10, 5), pady=10, sticky="ew")
@@ -100,7 +132,7 @@ def update_size_options(event):
     selected_type = Entry_type.get()
 
     if selected_type == "Серьги":
-        lbl_size.config(text="Размер")  # Для серег можно просто скрыть или оставить "Размер"
+        lbl_size.config(text="Размер")
         Entry_size['values'] = ["—"]
         Entry_size.set("—")
 
@@ -284,9 +316,11 @@ def add_item_to_db():
         Entry_category.set("")
         Entry_metal.set("")
         Entry_gemstone.set("")
-        Entry_purity.delete(0, tk.END)
+        Entry_purity.set("")
         Entry_weight.delete(0, tk.END)
         Entry_price.delete(0, tk.END)
+        Entry_quantity.delete(0, tk.END)
+        Entry_quantity.insert(0, "1")
 
         messagebox.showinfo("Успех", "Изделие добавлено!")
         load_data_from_db()
@@ -385,7 +419,8 @@ def open_buy_window():
 
     # Количество
     tk.Label(buy_win, text="Количество:", bg=bg_color, fg=text_color).pack()
-    koli = tk.Entry(buy_win, width=10, justify="center")
+    koli = tk.Entry(buy_win, width=10, justify="center",
+                    validate="key", validatecommand=(v_int, '%P'))
     koli.insert(0, "1")
     koli.pack(pady=5)
 
@@ -680,11 +715,30 @@ sort_menu.add_command(label="Сбросить сортировку", command=res
 delete = tk.Button(root, text="Удалить",bg="#2D6A4F", fg="white",width=25,command=delete_selected_item)
 delete.grid(row=1, column=0, padx=500, pady=10, sticky="w")
 
+def show_manual():
+    messagebox.showinfo("Руководство пользователя",
+        "1. Добавление: Заполните поля и нажмите 'Добавить изделие'.\n"
+        "2. Поиск: Вводите название в строку поиска для мгновенной фильтрации.\n"
+        "3. Покупка: Выберите товар в таблице и нажмите 'Купить изделие'.\n"
+        "4. Отчеты: Нажмите кнопку 'Отчеты' для просмотра статистики продаж.")
+
+def show_about_program():
+    messagebox.showinfo("О программе",
+        "Система учета продаж ювелирных изделий 'Алмазный путь'\n\n"
+        "Программный комплекс предназначен для автоматизации розничной торговли: "
+        "учета товарных запасов, фиксации продаж и ведения аналитики покупательского спроса.\n\n"
+        "Версия: 3.0\n"
+        "Технологии: Python (Tkinter), MySQL (СУБД).")
+
+def show_me():
+    messagebox.showinfo("О разработчике","Исаев Рамин Захид оглы ИС-943")
+
 inf_menu = tk.Menu(Menu, tearoff=0)
 Menu.add_cascade(label="Справочная информация", menu=inf_menu)
-inf_menu.add_command(label="Руководство пользователя")
-inf_menu.add_command(label="О программе")
-inf_menu.add_command(label="О разработчике")
+inf_menu.add_command(label="Руководство пользователя",command=show_manual)
+inf_menu.add_command(label="О программе",command=show_about_program)
+inf_menu.add_command(label="О разработчике",command=show_me)
+
 
 #покупка
 buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white",command=open_buy_window)
@@ -719,6 +773,16 @@ def new_window():
     date_to = DateEntry(frame, width=10, date_pattern='yyyy-mm-dd')
     date_to.pack(side="left", padx=5)
 
+    def reset_all_filters():
+        combo_seller.set("— Все —")
+        po_kat.set("— Все —")
+        po_mat.set("— Все —")
+
+        date_from.set_date(date.today())
+        date_to.set_date(date.today())
+
+        load_report_data()
+
     tk.Label(frame, text="Продавец:", bg=bg_color).pack(side="left", padx=5)
     combo_seller = ttk.Combobox(frame, values=["Иванов И.И.", "Петров П.П.", "Сидорова А.А."], state="readonly",width=15)
     combo_seller.set("— Все —")
@@ -726,8 +790,10 @@ def new_window():
 
     # Категории и Материалы
     po_kat = create_filter_combo(frame, "Категория:", ["Свадебные", "Женские", "Мужские", "Детские"])
+    po_kat.set("— Все —")
     po_mat = create_filter_combo(frame, "Материал:",
                                  ["Золото", "Красное золото", "Белое золото", "Желтое золото", "Серебро"])
+    po_mat.set("— Все —")
     #популярность
     def load_popular_data():
         start_date = date_from.get()
@@ -783,16 +849,6 @@ def new_window():
         except Exception as e:
             messagebox.showerror("Ошибка", f"Ошибка БД: {e}")
 
-    # Кнопки
-    po_pop = tk.Button(frame, text="По популярности", bg="#2D6A4F", fg="white",command=load_popular_data)
-    po_pop.pack(side="left", padx=10)
-
-    btn_apply = tk.Button(frame, text="Обновить", bg=text_color, fg="white", command=lambda: load_report_data())
-    btn_apply.pack(side="left", padx=5)
-
-    btn_save = tk.Button(frame, text="Сохранить в Word", bg="#2D6A4F", fg="white", command=lambda: save())
-    btn_save.pack(side="left", padx=5)
-
     # Таблица
     cols = ('ID', 'Дата', 'Продавец', 'Товар','Материал', 'Категория','Кол-во проданных', 'Цена', 'Оплата',"Итого")
     tree_report = ttk.Treeview(root2, columns=cols, show='headings')
@@ -807,24 +863,106 @@ def new_window():
     lbl_summ = tk.Label(summ_frame, text="Загрузка данных...", font=("Segoe UI", 12, "bold"), bg="#2D6A4F", fg="white")
     lbl_summ.pack(pady=10)
 
-    # Логика загрузки
-    def load_report_data():
+    def load_efficiency():
         for i in tree_report.get_children(): tree_report.delete(i)
+
+        start_date = date_from.get_date().strftime('%Y-%m-%d')
+        end_date = date_to.get_date().strftime('%Y-%m-%d')
+
         try:
             conn = connect_to_db()
             cursor = conn.cursor(dictionary=True)
 
-            # Используем CONCAT с ID изделия (j.id)
+            # Запрос группирует данные именно по продавцам
             query = """
                 SELECT 
-                    CONCAT(j.prefix, '-', j.id) as full_id, 
-                    s.sale_date, s.seller_name, s.item_name, 
-                    j.metal, j.category, 
-                    s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
-                FROM sales_history s
-                LEFT JOIN jewelry_items j ON s.item_name = j.name
+                    seller_name, 
+                    COUNT(*) as sales_count, 
+                    SUM(quantity_sold) as total_qty, 
+                    SUM(total_price) as total_revenue
+                FROM sales_history
+                WHERE DATE(sale_date) BETWEEN %s AND %s
+                GROUP BY seller_name
+                ORDER BY total_revenue DESC
             """
-            cursor.execute(query)
+            cursor.execute(query, (start_date, end_date))
+            rows = cursor.fetchall()
+
+            for row in rows:
+                tree_report.insert("", tk.END, values=(
+                    "—", "—", row['seller_name'],
+                    "—", "—", "—", row['total_qty'],
+                    "—", "—", f"{row['total_revenue']:.2f}"
+                ))
+
+            lbl_summ.config(text="📊 Отчет по эффективности сотрудников")
+            conn.close()
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Ошибка БД: {e}")
+
+
+
+    # Логика загрузки
+    def load_report_data(is_popular=False):
+        for i in tree_report.get_children(): tree_report.delete(i)
+
+        # Берем значения напрямую из объектов DateEntry
+        start_date = date_from.get_date().strftime('%Y-%m-%d')
+        end_date = date_to.get_date().strftime('%Y-%m-%d')
+
+        seller = combo_seller.get()
+        category = po_kat.get()
+        material = po_mat.get()
+
+        try:
+            conn = connect_to_db()
+            cursor = conn.cursor(dictionary=True)
+
+            if is_popular:
+                query = """
+                    SELECT 
+                        CONCAT(MAX(j.prefix), '-', MIN(j.id)) as full_id, 
+                        '—' as sale_date, 
+                        '—' as seller_name, 
+                        s.item_name, 
+                        j.metal, 
+                        j.category, 
+                        SUM(s.quantity_sold) as quantity_sold, 
+                        AVG(s.price_per_item) as price_per_item, 
+                        '—' as payment_method, 
+                        SUM(s.total_price) as total_price
+                    FROM sales_history s
+                    JOIN jewelry_items j ON s.item_name = j.name
+                    WHERE DATE(s.sale_date) BETWEEN %s AND %s
+                """
+            else:
+                query = """
+                    SELECT 
+                        CONCAT(j.prefix, '-', j.id) as full_id, 
+                        DATE_FORMAT(s.sale_date, '%Y-%m-%d') as sale_date,
+                        s.seller_name, s.item_name, j.metal, j.category, 
+                        s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
+                    FROM sales_history s
+                    LEFT JOIN jewelry_items j ON s.item_name = j.name
+                    WHERE DATE(s.sale_date) BETWEEN %s AND %s
+                """
+
+            params = [start_date, end_date]
+
+            if seller != "— Все —":
+                query += " AND s.seller_name = %s"
+                params.append(seller)
+            if category != "— Все —":
+                query += " AND j.category = %s"
+                params.append(category)
+            if material != "— Все —":
+                query += " AND j.metal = %s"
+                params.append(material)
+
+            if is_popular:
+                query += " GROUP BY j.id, s.item_name, j.metal, j.category ORDER BY quantity_sold DESC"
+
+            cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
 
             total_sum = 0
@@ -832,19 +970,13 @@ def new_window():
 
             for row in rows:
                 tree_report.insert("", tk.END, values=(
-                    row['full_id'],
-                    row['sale_date'],
-                    row['seller_name'],
-                    row['item_name'],
-                    row['metal'] or "—",
-                    row['category'] or "—",
-                    row['quantity_sold'],
-                    row['price_per_item'],
-                    row['payment_method'],
-                    row['total_price']
+                    row['full_id'], row['sale_date'], row['seller_name'],
+                    row['item_name'], row['metal'] or "—", row['category'] or "—",
+                    row['quantity_sold'], row['price_per_item'],
+                    row['payment_method'], row['total_price']
                 ))
-                total_sum += row['total_price']
-                total_qty += row['quantity_sold']
+                total_sum += float(row['total_price'] or 0)
+                total_qty += int(row['quantity_sold'] or 0)
 
             lbl_summ.config(text=f"💰 Выручка: {total_sum:,.2f} руб. | 📦 Всего: {total_qty} шт.")
             conn.close()
@@ -856,6 +988,9 @@ def new_window():
     po_mat.bind("<<ComboboxSelected>>", lambda e: load_report_data())
     combo_seller.bind("<<ComboboxSelected>>", lambda e: load_report_data())
 
+    # Привязка для календаря (обновляется при смене даты)
+    date_from.bind("<<DateEntrySelected>>", lambda e: load_report_data())
+    date_to.bind("<<DateEntrySelected>>", lambda e: load_report_data())
     # сохранение в ворд
     def save():
         all_data = []
@@ -905,6 +1040,28 @@ def new_window():
                 messagebox.showinfo("Успех", "Отчет успешно сохранен в альбомном формате!")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
+
+    # Кнопки
+    po_pop = tk.Button(frame, text="По популярности", bg="#2D6A4F", fg="white",
+                       command=lambda: load_report_data(is_popular=True))
+    po_pop.pack(side="left", padx=5)
+
+    btn_eff = tk.Button(frame, text="Эффективность", bg="#2D6A4F", fg="white",
+                        command=load_efficiency)
+    btn_eff.pack(side="left", padx=5)
+
+    btn_apply = tk.Button(frame, text="Обновить", bg=text_color, fg="white",
+                          command=lambda: load_report_data(is_popular=False))
+    btn_apply.pack(side="left", padx=5)
+
+    btn_reset = tk.Button(frame, text="Сбросить всё", bg="#8B0000", fg="white",
+                          command=reset_all_filters)
+    btn_reset.pack(side="left", padx=5)
+
+    btn_save = tk.Button(frame, text="Сохранить в Word", bg="#2D6A4F", fg="white", command=save)
+    btn_save.pack(side="left", padx=5)
+
+
 
     # 3. Итоги
     summ_frame = tk.Frame(root2, bg="#2D6A4F")
