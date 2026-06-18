@@ -182,20 +182,22 @@ tree.grid(row=2, column=0, columnspan=2, padx=20, pady=5, sticky="nsew")
 def connect_to_db():
     try:
         connection = mysql.connector.connect(
-            host="localhost",
-            user="root",
-            password="1234",
-            database="diamond_path"
+            host="blc7gqdzfqspj5pimbbe-mysql.services.clever-cloud.com",
+            port=3306,
+            user="u0bp5lienenha2l1",
+            password="YHsQ0s53cdT4e2lVChNF",
+            database="blc7gqdzfqspj5pimbbe"
         )
+        # Проверка соединения
         cursor = connection.cursor()
         cursor.execute("SELECT @@hostname, @@port;")
         host_info = cursor.fetchone()
-        print(f"DEBUG: Подключились к серверу: {host_info[0]}, порт: {host_info[1]}")
+        print(f"DEBUG: Успешно! Подключились к Clever Cloud: {host_info[0]}, порт: {host_info[1]}")
         cursor.close()
 
         return connection
     except mysql.connector.Error as err:
-        print(f"Ошибка подключения: {err}")
+        print(f"Ошибка подключения к Clever Cloud: {err}")
         return None
 
 def load_data_from_db():
