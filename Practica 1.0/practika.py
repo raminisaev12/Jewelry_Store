@@ -380,17 +380,17 @@ def search_data(event=None):
             conn.close()
 
 
-viborka_label=tk.Label(root,text="Поиск изделия",fg=text_color,bg=bg_color,font=("Segoe UI", 12, "italic"))
+viborka_label=tk.Label(root,text="Поиск по названию изделия",fg=text_color,bg=bg_color,font=("Segoe UI", 12, "italic"))
 viborka_label.grid(row=1, column=0, padx=10, pady=10, sticky="w")
 
 
 viborka = ttk.Entry(root,width=20)
-viborka.grid(row=1, column=0, padx=125, pady=5, sticky="w")
+viborka.grid(row=1, column=0, padx=220, pady=5, sticky="w")
 
 viborka.bind("<KeyRelease>",search_data)
 
 update = tk.Button(root, text="Нажмите для обновления данных",width=30,bg=text_color,fg="white",command=load_data_from_db)
-update.grid(row=1, column=0, padx=275, pady=10, sticky="w")
+update.grid(row=1, column=0, padx=360, pady=10, sticky="w")
 current_sort_clause = ""
 
 
@@ -715,7 +715,7 @@ sort_menu.add_separator()
 sort_menu.add_command(label="Сбросить сортировку", command=reset_sorting,foreground="red")
 
 delete = tk.Button(root, text="Удалить",bg="#2D6A4F", fg="white",width=25,command=delete_selected_item)
-delete.grid(row=1, column=0, padx=500, pady=10, sticky="w")
+delete.grid(row=1, column=0, padx=590, pady=10, sticky="w")
 
 def show_manual():
     messagebox.showinfo("Руководство пользователя",
@@ -744,7 +744,7 @@ inf_menu.add_command(label="О разработчике",command=show_me)
 
 #покупка
 buy = tk.Button(root,text="Купить изделие",bg="#2D6A4F", fg="white",command=open_buy_window)
-buy.grid(row=1, column=0, padx=690, pady=10, sticky="w")
+buy.grid(row=1, column=0, padx=779, pady=10, sticky="w")
 
 #отчеты
 def new_window():
@@ -971,13 +971,22 @@ def new_window():
             total_qty = 0
 
             for row in rows:
+
+                cena_chislo = float(row['price_per_item'] or 0)
+                cena_krasivaya = f"{cena_chislo:.2f}"
+
+
+                itogo_chislo = float(row['total_price'] or 0)
+                itogo_krasivo = f"{itogo_chislo:.2f}"
+
+
                 tree_report.insert("", tk.END, values=(
                     row['full_id'], row['sale_date'], row['seller_name'],
                     row['item_name'], row['metal'] or "—", row['category'] or "—",
-                    row['quantity_sold'], row['price_per_item'],
-                    row['payment_method'], row['total_price']
+                    row['quantity_sold'], cena_krasivaya,
+                    row['payment_method'], itogo_krasivo
                 ))
-                total_sum += float(row['total_price'] or 0)
+                total_sum += itogo_chislo
                 total_qty += int(row['quantity_sold'] or 0)
 
             lbl_summ.config(text=f"💰 Выручка: {total_sum:,.2f} руб. | 📦 Всего: {total_qty} шт.")
@@ -994,6 +1003,7 @@ def new_window():
     date_from.bind("<<DateEntrySelected>>", lambda e: load_report_data())
     date_to.bind("<<DateEntrySelected>>", lambda e: load_report_data())
     # сохранение в ворд
+    # сохранение в ворд
     def save():
         all_data = []
         for row_id in tree_report.get_children():
@@ -1004,7 +1014,7 @@ def new_window():
             return
 
         from docx.enum.section import WD_ORIENT
-        from docx.shared import Cm
+        from docx.shared import Pt
 
         doc = Document()
 
@@ -1021,7 +1031,8 @@ def new_window():
         table = doc.add_table(rows=1, cols=10)
         table.style = "Table Grid"
 
-        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Материал', 'Категория', 'Кол-во проданных', 'Цена', 'Оплата', "Итого"]
+        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Материал', 'Категория', 'Кол-во проданных', 'Цена', 'Оплата',
+                   "Итого"]
 
         hdr_cells = table.rows[0].cells
         for i, h in enumerate(headers):
@@ -1032,6 +1043,16 @@ def new_window():
             for i, val in enumerate(row_values):
                 row_cells[i].text = str(val)
 
+        # Добавляем пустую строку для красивого отступа от таблицы
+        doc.add_paragraph()
+
+        # 3. Берем общую строку выручки и количества прямо с экрана (из lbl_summ)
+        p_summ = doc.add_paragraph()
+        run_summ = p_summ.add_run(lbl_summ.cget("text"))  # Подтягивает: "💰 Выручка: ... руб. | 📦 Всего: ... шт."
+        run_summ.bold = True
+        run_summ.font.size = Pt(12)
+
+        # 4. Показываем окно сохранения файла в самый последний момент
         file_path = filedialog.asksaveasfilename(
             defaultextension=".docx",
             filetypes=[("Word Document", "*.docx")]
@@ -1077,6 +1098,6 @@ def new_window():
 
 
 btn2 = tk.Button(root, text ="Отчеты",bg="#2D6A4F", fg="white",width=20,command=new_window)
-btn2.grid(row=1, column=0, padx=790, pady=10, sticky="w")
+btn2.grid(row=1, column=0, padx=885, pady=10, sticky="w")
 
 root.mainloop()
