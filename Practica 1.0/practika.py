@@ -267,8 +267,6 @@ def generate_five_digit_id():
     return random.randint(10000, 99999)
 
 def add_item_to_db():
-    # Собираем данные
-    new_id = generate_five_digit_id()
     data = {
         "Название": Entry_name.get(),
         "Тип": Entry_type.get(),
@@ -282,7 +280,6 @@ def add_item_to_db():
         "Цена": Entry_price.get()
     }
 
-    # Проверка на пустоту
     for label, value in data.items():
         if not value.strip():
             messagebox.showwarning("Ошибка", f"Поле '{label}' обязательно!")
@@ -293,26 +290,46 @@ def add_item_to_db():
         conn = connect_to_db()
         cursor = conn.cursor()
 
-        # SQL запрос
-        cursor.execute("CALL AddJewelry(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
-            Entry_name.get(),
-            Entry_type.get(),
-            Entry_category.get(),
-            Entry_metal.get(),
-            Entry_purity.get(),
-            Entry_weight.get(),
-            Entry_quantity.get(),  # Количество
-            Entry_price.get(),  # Цена
-            Entry_gemstone.get(),
-            Entry_size.get()
-        ))
+        # Определяем префикс и диапазон ID по типу
+        prefix_map = {
+            "Кольцо":  ("A", 1000, 1999),
+            "Серьги":  ("B", 2000, 2999),
+            "Браслет": ("C", 3000, 3999),
+            "Цепочка": ("D", 4000, 4999)
+        }
+        prefix, min_id, max_id = prefix_map.get(Entry_type.get(), ("A", 1000, 1999))
+
+        # Находим следующий свободный номер в диапазоне
+        cursor.execute(
+            "SELECT MAX(id) FROM jewelry_items WHERE prefix = %s AND id BETWEEN %s AND %s",
+            (prefix, min_id, max_id)
+        )
+        row = cursor.fetchone()
+        if row[0] is None:
+            new_id = min_id
+        else:
+            if row[0] >= max_id:
+                messagebox.showwarning("Лимит", f"Достигнут лимит ID для типа «{Entry_type.get()}» (макс. {max_id})")
+                return
+            new_id = row[0] + 1
+
+        # Прямой INSERT вместо CALL AddJewelry
+        cursor.execute("""
+            INSERT INTO jewelry_items (id, prefix, name, type, category, metal, gemstone, purity, weight, size, quantity, price)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (new_id, prefix,
+              Entry_name.get(), Entry_type.get(), Entry_category.get(), Entry_metal.get(),
+              Entry_gemstone.get(), Entry_purity.get(),
+              float(Entry_weight.get() or 0),
+              Entry_size.get(), int(Entry_quantity.get() or 1),
+              float(Entry_price.get() or 0)))
 
         conn.commit()
-        print(f"Успешно добавлено строк: {cursor.rowcount}")
+        print(f"Успешно добавлено, ID = {prefix}-{new_id}")
 
         cursor.close()
 
-        # Очистка
+        # Очистка полей
         Entry_name.delete(0, tk.END)
         Entry_type.set("")
         Entry_category.set("")
@@ -327,13 +344,10 @@ def add_item_to_db():
         messagebox.showinfo("Успех", "Изделие добавлено!")
         load_data_from_db()
 
-
     except Exception as e:
-
         messagebox.showerror("Ошибка", f"Не удалось добавить в базу:\n{e}")
 
     finally:
-
         if conn:
             conn.close()
 
