@@ -5,13 +5,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install flet
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet pymysql python-docx
       - name: Build APK
-        uses: flet-dev/flet-build-action@v1
+        run: |
+          flet build apk --module-name telefon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
-          project-name: AlmazPath
-          main-file: telefon.py
-          build-command: flet build apk
+          name: almaz-apk
+          path: build/apk/*.apk
