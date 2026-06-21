@@ -20,7 +20,7 @@ jobs:
           pip install flet pymysql python-docx
       - name: Build APK
         run: |
-          echo y | flet build apk --module-name telefon --app-name "Алмазный путь"
+          echo y | flet build apk --module-name telefon
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
