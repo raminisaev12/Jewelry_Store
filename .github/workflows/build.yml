@@ -33,16 +33,16 @@ jobs:
             sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
             echo "Manifest updated: $MANIFEST"
           else
-            echo "Manifest not found, aborting."
+            echo "Manifest not found!"
             exit 1
           fi
 
       - name: Rebuild APK with custom name
         run: |
-          export PATH="$HOME/flutter/bin:$PATH"
-          flutter build apk --release
-          mkdir -p final_apk
-          cp build/app/outputs/flutter-apk/app-release.apk final_apk/almaz.apk
+          cd build/flutter
+          $HOME/flutter/bin/flutter build apk --release
+          mkdir -p ../../final_apk
+          cp build/app/outputs/flutter-apk/app-release.apk ../../final_apk/almaz.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
