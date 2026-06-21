@@ -7,6 +7,7 @@ jobs:
       run:
         working-directory: Practica 1.0
     steps:
+    
       - uses: actions/checkout@v4
       - name: Show files (for debug)
         run: ls -la
