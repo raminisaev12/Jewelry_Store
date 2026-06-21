@@ -1,15 +1,26 @@
 import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageTk
-import mysql.connector
+import pymysql
 from tkinter import messagebox
 import random
 from tkcalendar import DateEntry
 from docx import Document
-from docx.shared import Pt
 from tkinter import filedialog
-from docx.shared import Inches
 from datetime import date
+import sys
+import os
+import pymysql.cursors
+
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
 
 
 root = tk.Tk()
@@ -20,7 +31,7 @@ root.columnconfigure(0, weight=1)
 root.columnconfigure(1, weight=1)
 root.rowconfigure(2, weight=1)
 
-l=Image.open("logo2.png")
+l = Image.open(resource_path("logo2.png"))
 l= ImageTk.PhotoImage(l)
 
 root.iconphoto(True, l)
@@ -30,7 +41,7 @@ text_color = "#2D6A4F"
 root.configure(bg=bg_color)
 root.rowconfigure(1, weight=1)
 
-img = Image.open("logo.png")
+img = Image.open(resource_path("logo.png"))
 img = img.resize((40, 40))
 logo_img = ImageTk.PhotoImage(img)
 
@@ -118,14 +129,14 @@ Entry_weight.config(validate="key", validatecommand=(v_float, '%P')) # числ�
 Entry_price = create_field("Цена (₽)", 2, 2)
 Entry_price.config(validate="key", validatecommand=(v_float, '%P'))  #число
 
-Entry_size = create_combobox("Размер", 2, 3, ["15", "15.5", "16", "16.5", "17", "17.5", "18"])
+
 Entry_quantity = create_field("Количество", 2, 4)
 Entry_quantity.config(validate="key", validatecommand=(v_int, '%P'))
 
 lbl_size = tk.Label(border_frame, text="Размер", bg=bg_color, fg=text_color)
 lbl_size.grid(row=2, column=3 * 2, padx=(10, 5), pady=10, sticky="ew")
 
-Entry_size = ttk.Combobox(border_frame, values=["15", "16", "17", "18"], state="readonly")
+Entry_size = ttk.Combobox(border_frame, values=["15", "15.5", "16", "16.5", "17", "17.5", "18"], state="readonly")
 Entry_size.grid(row=2, column=3 * 2 + 1, padx=(0, 10), pady=10, sticky="ew")
 # Функция для обновления списка размеров в зависимости от типа
 def update_size_options(event):
@@ -177,56 +188,51 @@ for col in cols:
     tree.column(col,width=100,anchor="center")
 
 tree.grid(row=2, column=0, columnspan=2, padx=20, pady=5, sticky="nsew")
+####
+total_label = tk.Label(root, text="Всего товаров: 0",
+                       bg=bg_color, fg=text_color,
+                       font=("Segoe UI", 10, "bold"))
+total_label.grid(row=3, column=0, columnspan=2, pady=(5, 0))
+
 
 ###базза данных
 def connect_to_db():
     try:
-        connection = mysql.connector.connect(
+        connection = pymysql.connect(           # +++++ заменён mysql.connector
             host="blc7gqdzfqspj5pimbbe-mysql.services.clever-cloud.com",
             port=3306,
             user="u0bp5lienenha2l1",
             password="YHsQ0s53cdT4e2lVChNF",
-            database="blc7gqdzfqspj5pimbbe"
+            database="blc7gqdzfqspj5pimbbe",
+            cursorclass=pymysql.cursors.Cursor  # +++++ обычный курсор
         )
-        # Проверка соединения
-        cursor = connection.cursor()
-        cursor.execute("SELECT @@hostname, @@port;")
-        host_info = cursor.fetchone()
-        print(f"DEBUG: Успешно! Подключились к Clever Cloud: {host_info[0]}, порт: {host_info[1]}")
-        cursor.close()
-
+        print("DEBUG: Успешно! Подключились к Clever Cloud")
         return connection
-    except mysql.connector.Error as err:
-        print(f"Ошибка подключения к Clever Cloud: {err}")
+    except Exception as e:
+        print(f"Ошибка подключения к Clever Cloud: {e}")
         return None
 
 def load_data_from_db():
     for item in tree.get_children():
         tree.delete(item)
-
-    conn = None
+    conn = connect_to_db()
+    if not conn or not conn.open:
+        return
     try:
-        conn = connect_to_db()
-        if conn and conn.is_connected():
-            cursor = conn.cursor()
+        with conn.cursor() as cursor:
             cursor.execute("""
-                            SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
-                            FROM jewelry_items
-                        """)
+                SELECT CONCAT(prefix, '-', id), name, type, category, metal, gemstone, purity, weight, size, quantity, price 
+                FROM jewelry_items
+            """)
             rows = cursor.fetchall()
-            print(f"Найдено записей в базе: {len(rows)}") # ЭТО ПОКАЖЕТ, ЧТО ПРИШЛО ИЗ БАЗЫ
-
             for row in rows:
                 tree.insert("", tk.END, values=row)
-
-            cursor.close()
-        else:
-            print("Соединение с базой не удалось!")
-    except mysql.connector.Error as err:
-        print(f"Ошибка при работе с данными: {err}")
+            total_label.config(text=f"Всего товаров: {len(rows)}")
+            cached_distinct.clear()
+    except Exception as e:
+        print(f"Ошибка загрузки данных: {e}")
     finally:
-        if conn and conn.is_connected():
-            conn.close()
+        conn.close()
 load_data_from_db()
 
 def delete_selected_item():
@@ -255,12 +261,13 @@ def delete_selected_item():
         conn.commit()
         cursor.close()
         messagebox.showinfo("Успех", "Изделие успешно удалено!")
+        cached_distinct.clear()
         update_filters()
     except Exception as e:
         messagebox.showerror("Ошибка", f"Не удалось удалить из базы:\n{e}")
 
     finally:
-        if conn and conn.is_connected():
+        if conn and conn.open:
             conn.close()
 
 def generate_five_digit_id():
@@ -289,7 +296,7 @@ def add_item_to_db():
     try:
         conn = connect_to_db()
         cursor = conn.cursor()
-
+        cached_distinct.clear()
         # Определяем префикс и диапазон ID по типу
         prefix_map = {
             "Кольцо":  ("A", 1000, 1999),
@@ -313,16 +320,17 @@ def add_item_to_db():
                 return
             new_id = row[0] + 1
 
-        # Прямой INSERT вместо CALL AddJewelry
+        params = (new_id, prefix,
+                  Entry_name.get(), Entry_type.get(), Entry_category.get(), Entry_metal.get(),
+                  Entry_gemstone.get(), Entry_purity.get(),
+                  float(Entry_weight.get().replace(',', '.') or 0),
+                  Entry_size.get(), int(Entry_quantity.get() or 1),
+                  float(Entry_price.get().replace(',', '.') or 0))
+
         cursor.execute("""
-            INSERT INTO jewelry_items (id, prefix, name, type, category, metal, gemstone, purity, weight, size, quantity, price)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (new_id, prefix,
-              Entry_name.get(), Entry_type.get(), Entry_category.get(), Entry_metal.get(),
-              Entry_gemstone.get(), Entry_purity.get(),
-              float(Entry_weight.get() or 0),
-              Entry_size.get(), int(Entry_quantity.get() or 1),
-              float(Entry_price.get() or 0)))
+                    INSERT INTO jewelry_items (id, prefix, name, type, category, metal, gemstone, purity, weight, size, quantity, price)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, params)
 
         conn.commit()
         print(f"Успешно добавлено, ID = {prefix}-{new_id}")
@@ -347,8 +355,9 @@ def add_item_to_db():
     except Exception as e:
         messagebox.showerror("Ошибка", f"Не удалось добавить в базу:\n{e}")
 
+
     finally:
-        if conn:
+        if conn and conn.open:
             conn.close()
 
 # Сама кнопка
@@ -366,7 +375,7 @@ def search_data(event=None):
     conn = None
     try:
         conn = connect_to_db()
-        if conn and conn.is_connected():
+        if conn and conn.open:
             cursor = conn.cursor()
 
 
@@ -383,14 +392,17 @@ def search_data(event=None):
             rows = cursor.fetchall()
             for row in rows:
                 tree.insert("", tk.END, values=row)
+
+            total_label.config(text=f"Всего товаров: {len(rows)}")
+
             cursor.close()
 
-    except mysql.connector.Error as err:
+
+    except pymysql.Error as err:
         print(f"Ошибка поиска: {err}")
         messagebox.showerror("Ошибка поиска", str(err))
-
     finally:
-        if conn and conn.is_connected():
+        if conn and conn.open:
             conn.close()
 
 
@@ -406,7 +418,7 @@ viborka.bind("<KeyRelease>",search_data)
 update = tk.Button(root, text="Нажмите для обновления данных",width=30,bg=text_color,fg="white",command=load_data_from_db)
 update.grid(row=1, column=0, padx=360, pady=10, sticky="w")
 current_sort_clause = ""
-
+cached_distinct = {}
 
 def open_buy_window():
     selected_item = tree.selection()
@@ -504,16 +516,23 @@ def set_sort(sort_clause):
 
 
 def get_distinct_values(column):
-    """Возвращает список уникальных значений из таблицы jewelry_items для столбца column."""
+    # Если есть в кэше – возвращаем сразу
+    if column in cached_distinct:
+        return cached_distinct[column]
+
     conn = connect_to_db()
     if not conn:
         return []
     try:
         cursor = conn.cursor()
-        # Исключаем NULL и пустые строки
-        cursor.execute(f"SELECT DISTINCT {column} FROM jewelry_items WHERE {column} IS NOT NULL AND {column} != '' ORDER BY {column}")
+        cursor.execute(
+            f"SELECT DISTINCT {column} FROM jewelry_items "
+            f"WHERE {column} IS NOT NULL AND {column} != '' ORDER BY {column}"
+        )
         rows = cursor.fetchall()
-        return [r[0] for r in rows]
+        values = [r[0] for r in rows]
+        cached_distinct[column] = values
+        return values
     except Exception as e:
         print(f"Ошибка получения значений для {column}: {e}")
         return []
@@ -536,15 +555,21 @@ filter_vars = {
 
 # Функция обновления конкретного подменю
 def refresh_menu(menu, category, column):
-    """Удаляет старые пункты меню и создает новые checkbutton'ы на основе данных из БД."""
-    menu.delete(0, tk.END)   # очищаем меню
+    menu.delete(0, tk.END)                      # очищаем меню
     values = get_distinct_values(column)
-    # Очищаем старые переменные
-    filter_vars[category].clear()
+    current_vars = filter_vars.get(category, {})
+    for val in list(current_vars.keys()):
+        if val not in values:
+            del current_vars[val]
+
     for val in values:
-        var = tk.BooleanVar()
-        filter_vars[category][val] = var
+        if val in current_vars:
+            var = current_vars[val]
+        else:
+            var = tk.BooleanVar()
+            current_vars[val] = var
         menu.add_checkbutton(label=val, variable=var, command=update_filters)
+    filter_vars[category] = current_vars
 
 # Пост-команды для каждого подменю
 def refresh_name_menu():
@@ -647,7 +672,7 @@ def update_filters():
     conn = None
     try:
         conn = connect_to_db()
-        if conn and conn.is_connected():
+        if conn and conn.open:
             cursor = conn.cursor()
             cursor.execute(query, tuple(params))
             rows = cursor.fetchall()
@@ -656,11 +681,14 @@ def update_filters():
                 tree.delete(item)
             for row in rows:
                 tree.insert("", tk.END, values=row)
+
+            total_label.config(text=f"Всего товаров: {len(rows)}")
+
             cursor.close()
-    except mysql.connector.Error as err:
-        print(f"Ошибка фильтрации: {err}")
+    except pymysql.Error as err:
+            print(f"Ошибка фильтрации: {err}")
     finally:
-        if conn and conn.is_connected():
+        if conn and conn.open:
             conn.close()
 
 def reset_filters():
@@ -818,13 +846,13 @@ def new_window():
 
         try:
             conn = connect_to_db()
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
 
             # Группируем по уникальному ID изделия, чтобы база не выдавала ошибку 1055
             query = """
                             SELECT 
                                 CONCAT(MAX(j.prefix), '-', MIN(j.id)) as full_id, 
-                                DATE_FORMAT(MAX(s.sale_date), '%Y-%m-%d') as sale_date,  -- Вот здесь магия
+                                DATE_FORMAT(MAX(s.sale_date), '%%Y-%%m-%%d') as sale_date,  -- Вот здесь магия
                                 '—' as seller_name, 
                                 s.item_name, 
                                 j.metal, 
@@ -887,7 +915,7 @@ def new_window():
 
         try:
             conn = connect_to_db()
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
 
             # Запрос группирует данные именно по продавцам
             query = """
@@ -932,7 +960,7 @@ def new_window():
 
         try:
             conn = connect_to_db()
-            cursor = conn.cursor(dictionary=True)
+            cursor = conn.cursor(pymysql.cursors.DictCursor)
 
             if is_popular:
                 query = """
@@ -955,7 +983,7 @@ def new_window():
                 query = """
                     SELECT 
                         CONCAT(j.prefix, '-', j.id) as full_id, 
-                        DATE_FORMAT(s.sale_date, '%Y-%m-%d') as sale_date,
+                        DATE_FORMAT(s.sale_date, '%%Y-%%m-%%d') as sale_date,
                         s.seller_name, s.item_name, j.metal, j.category, 
                         s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
                     FROM sales_history s
@@ -1062,7 +1090,7 @@ def new_window():
 
         # 3. Берем общую строку выручки и количества прямо с экрана (из lbl_summ)
         p_summ = doc.add_paragraph()
-        run_summ = p_summ.add_run(lbl_summ.cget("text"))  # Подтягивает: "💰 Выручка: ... руб. | 📦 Всего: ... шт."
+        run_summ = p_summ.add_run(lbl_summ["text"])
         run_summ.bold = True
         run_summ.font.size = Pt(12)
 
