@@ -48,9 +48,8 @@ def main(page: ft.Page):
     page.padding = 10
     page.scroll = ft.ScrollMode.AUTO
 
-    page.window_width = 390
-    page.window_height = 844
-    page.window_resizable = True
+    page.window_fullscreen = True
+    page.window_resizable = False
 
     page.data = {"current_sort": "", "selected_item": None}
 
