@@ -23,43 +23,33 @@ jobs:
         run: |
           echo y | flet build apk --module-name telefon
 
-      - name: Patch APK app name
+      - name: Rename app in APK
         run: |
-          # Установим нужные инструменты
+          # Инструменты
           sudo apt-get update -qq && sudo apt-get install -y -qq zipalign
 
-          # Найдём APK
           ORIG_APK=$(ls build/apk/*.apk | head -n 1)
           echo "Original APK: $ORIG_APK"
 
-          # Распакуем APK (это обычный zip)
+          # Распаковываем APK как zip
           mkdir apk_content
           unzip -q "$ORIG_APK" -d apk_content
-          # Удалим старую подпись
-          rm -rf apk_content/META-INF
+          rm -rf apk_content/META-INF  # старая подпись
 
-          # AndroidManifest.xml внутри APK – бинарный, преобразуем в текст
-          export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
-          AAPT=$ANDROID_SDK_ROOT/build-tools/34.0.0/aapt
-          chmod +x $AAPT
+          # Конвертируем бинарный манифест в текст и меняем название
+          AAPT=/usr/local/lib/android/sdk/build-tools/34.0.0/aapt
           $AAPT d xmltree apk_content/AndroidManifest.xml > manifest.txt
-
-          # Заменим label (первое вхождение android:label)
-          sed -i 's/\(android:label(.*\)\"[^\"]*\"/\1\"Алмазный путь\"/' manifest.txt
-          # Соберём обратно бинарный манифест
-          $AAPT p -M manifest.txt -S dummy -I $ANDROID_SDK_ROOT/platforms/android-34/android.jar -F new-manifest.apk > /dev/null 2>&1
-          # Извлечём из нового apk наш манифест
+          sed -i 's/\(android:label\)="[^"]*"/\1="Алмазный путь"/' manifest.txt
+          
+          # Создаём новый бинарный манифест
+          $AAPT p -M manifest.txt -S dummy -I /usr/local/lib/android/sdk/platforms/android-34/android.jar -F new-manifest.apk
           unzip -q -o new-manifest.apk AndroidManifest.xml -d apk_content
 
-          # Запакуем обратно в APK
-          cd apk_content
-          zip -q -r ../repacked.apk .
-          cd ..
+          # Упаковываем обратно в APK
+          cd apk_content && zip -qr ../repacked.apk . && cd ..
 
-          # Выровняем и подпишем
+          # Выравниваем и подписываем
           zipalign -p 4 repacked.apk aligned.apk
-
-          # Создадим debug-ключ
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
           apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android aligned.apk
 
