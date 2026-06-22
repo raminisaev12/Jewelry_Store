@@ -26,9 +26,9 @@ jobs:
         run: |
           echo y | flet build apk --module-name telefon
 
-      - name: Replace app name in manifest
+      - name: Replace app name in AndroidManifest
         run: |
-          MANIFEST=$(find . -name AndroidManifest.xml -path "*/src/main/*" | head -n 1)
+          MANIFEST=$(find build/ -name AndroidManifest.xml -path "*/src/main/*" | head -n 1)
           if [ -f "$MANIFEST" ]; then
             sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
             echo "Manifest updated: $MANIFEST"
@@ -37,10 +37,13 @@ jobs:
             exit 1
           fi
 
-      - name: Rebuild APK with custom name
+      - name: Rebuild APK using Gradle
         run: |
           cd build/flutter
-          $HOME/flutter/bin/flutter build apk --release
+          chmod +x gradlew
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export JAVA_HOME=$JAVA_HOME_17_X64
+          ./gradlew assembleRelease
           mkdir -p ../../final_apk
           cp build/app/outputs/flutter-apk/app-release.apk ../../final_apk/almaz.apk
 
