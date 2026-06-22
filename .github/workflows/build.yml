@@ -1,0 +1,29 @@
+name: Build APK
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Practica 1.0
+    steps:
+    
+      - uses: actions/checkout@v4
+      - name: Show files (for debug)
+        run: ls -la
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet pymysql python-docx
+      - name: Build APK
+        run: |
+          echo y | flet build apk --module-name telefon
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: almaz-apk
+          path: Practica 1.0/build/apk/*.apk
