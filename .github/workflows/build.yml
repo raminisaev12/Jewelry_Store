@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK with Custom Name
 on: [push]
 jobs:
   build:
@@ -19,34 +19,46 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet pymysql python-docx
 
-      - name: Build APK (initial)
+      - name: Build APK (standard)
         run: |
           echo y | flet build apk --module-name telefon
 
-      - name: Replace app name in AndroidManifest
+      - name: Setup apktool and signing tools
         run: |
-          MANIFEST=$(find build/ -name AndroidManifest.xml -path "*/src/main/*" | head -n 1)
-          if [ -f "$MANIFEST" ]; then
-            sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
-            echo "Manifest updated: $MANIFEST"
-          else
-            echo "Manifest not found!"
-            exit 1
-          fi
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq apktool zipalign
+          # Создаём debug-ключ для подписи
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
 
-      - name: Rebuild APK with custom name (Gradle)
+      - name: Patch APK to set custom app name
         run: |
-          cd build/flutter/android
-          chmod +x gradlew
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export JAVA_HOME=$JAVA_HOME_17_X64
-          # Добавляем переменную, которую требует serious_python
-          export SERIOUS_PYTHON_SITE_PACKAGES=$(find ../python -type d -name site-packages | head -n 1 | xargs realpath)
-          echo "SITE_PACKAGES=$SERIOUS_PYTHON_SITE_PACKAGES"
-          ./gradlew assembleRelease
-          cd ../../..
-          mkdir -p final_apk
-          cp build/flutter/android/app/build/outputs/flutter-apk/app-release.apk final_apk/almaz.apk
+          ORIG_APK=$(ls build/apk/*.apk | head -n 1)
+          echo "Original APK: $ORIG_APK"
+          
+          # Распаковываем APK
+          apktool d -f "$ORIG_APK" -o patched_apk
+          
+          # Меняем android:label в AndroidManifest.xml
+          MANIFEST="patched_apk/AndroidManifest.xml"
+          if grep -q 'android:label=' "$MANIFEST"; then
+            sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
+            echo "Label replaced in AndroidManifest.xml"
+          fi
+          
+          # Дополнительно меняем app_name в strings.xml (если там)
+          for STRINGS in $(find patched_apk/res -name 'strings.xml'); do
+            sed -i 's/<string name="app_name">[^<]*<\/string>/<string name="app_name">Алмазный путь<\/string>/g' "$STRINGS"
+          done
+          
+          # Собираем APK обратно
+          apktool b patched_apk -o new_unaligned.apk
+          
+          # Выравниваем и подписываем
+          zipalign -p 4 new_unaligned.apk new_aligned.apk
+          apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android new_aligned.apk
+          
+          mkdir final_apk
+          mv new_aligned.apk final_apk/almaz.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
