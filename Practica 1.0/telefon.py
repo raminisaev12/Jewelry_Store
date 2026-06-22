@@ -523,12 +523,13 @@ def main(page: ft.Page):
                 query += " GROUP BY j.id, s.item_name, j.metal, j.category ORDER BY total_qty DESC"
             else:
                 query = """
-                    SELECT s.id, s.sale_date, s.seller_name, s.item_name, j.metal, j.category,
-                           s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
-                    FROM sales_history s
-                    LEFT JOIN jewelry_items j ON s.item_name = j.name
-                    WHERE 1=1
-                """
+                                    SELECT CONCAT(j.prefix, '-', j.id) as full_id,
+                                           s.sale_date, s.seller_name, s.item_name, j.metal, j.category,
+                                           s.quantity_sold, s.price_per_item, s.payment_method, s.total_price
+                                    FROM sales_history s
+                                    LEFT JOIN jewelry_items j ON s.item_name = j.name
+                                    WHERE 1=1
+                                """
                 params = []
                 if start: query += " AND s.sale_date >= %s"; params.append(start)
                 if end: query += " AND s.sale_date <= %s"; params.append(end)

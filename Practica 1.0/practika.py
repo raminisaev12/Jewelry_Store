@@ -11,7 +11,8 @@ from datetime import date
 import sys
 import os
 import pymysql.cursors
-
+from openpyxl import Workbook
+from openpyxl.utils import get_column_letter
 
 def resource_path(relative_path):
     try:
@@ -1055,54 +1056,47 @@ def new_window():
             messagebox.showwarning("Внимание", "Таблица пуста!")
             return
 
-        from docx.enum.section import WD_ORIENT
-        from docx.shared import Pt
+        # Определяем колонки, которые полностью состоят из "—"
+        exclude_indices = []
+        for col_idx in range(len(cols)):
+            if all(row[col_idx] == "—" for row in all_data):
+                exclude_indices.append(col_idx)
 
-        doc = Document()
+        # Создаём Excel-книгу
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Отчёт"
 
-        # 1. Меняем ориентацию страницы на альбомную
-        section = doc.sections[0]
-        new_width, new_height = section.page_height, section.page_width
-        section.orientation = WD_ORIENT.LANDSCAPE
-        section.page_width = new_width
-        section.page_height = new_height
+        # Заголовки (без исключённых колонок)
+        headers = [h for i, h in enumerate(cols) if i not in exclude_indices]
+        ws.append(headers)
 
-        doc.add_heading("Отчет по продажам", 0)
+        # Данные (без исключённых колонок)
+        for row in all_data:
+            filtered_row = [val for i, val in enumerate(row) if i not in exclude_indices]
+            ws.append(filtered_row)
 
-        # 2. Создаем таблицу (10 столбцов)
-        table = doc.add_table(rows=1, cols=10)
-        table.style = "Table Grid"
+        # Автоматическая ширина колонок
+        for col_cells in ws.columns:
+            max_len = 0
+            col_letter = get_column_letter(col_cells[0].column)
+            for cell in col_cells:
+                try:
+                    if cell.value:
+                        max_len = max(max_len, len(str(cell.value)))
+                except:
+                    pass
+            ws.column_dimensions[col_letter].width = min(max_len + 2, 30)
 
-        headers = ['ID', 'Дата', 'Продавец', 'Товар', 'Материал', 'Категория', 'Кол-во проданных', 'Цена', 'Оплата',
-                   "Итого"]
-
-        hdr_cells = table.rows[0].cells
-        for i, h in enumerate(headers):
-            hdr_cells[i].text = h
-
-        for row_values in all_data:
-            row_cells = table.add_row().cells
-            for i, val in enumerate(row_values):
-                row_cells[i].text = str(val)
-
-        # Добавляем пустую строку для красивого отступа от таблицы
-        doc.add_paragraph()
-
-        # 3. Берем общую строку выручки и количества прямо с экрана (из lbl_summ)
-        p_summ = doc.add_paragraph()
-        run_summ = p_summ.add_run(lbl_summ["text"])
-        run_summ.bold = True
-        run_summ.font.size = Pt(12)
-
-        # 4. Показываем окно сохранения файла в самый последний момент
+        # Сохраняем файл
         file_path = filedialog.asksaveasfilename(
-            defaultextension=".docx",
-            filetypes=[("Word Document", "*.docx")]
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx"), ("All files", "*.*")]
         )
         if file_path:
             try:
-                doc.save(file_path)
-                messagebox.showinfo("Успех", "Отчет успешно сохранен в альбомном формате!")
+                wb.save(file_path)
+                messagebox.showinfo("Успех", "Отчёт успешно сохранён в Excel!")
             except Exception as e:
                 messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
 
@@ -1123,7 +1117,7 @@ def new_window():
                           command=reset_all_filters)
     btn_reset.pack(side="left", padx=5)
 
-    btn_save = tk.Button(frame, text="Сохранить в Word", bg="#2D6A4F", fg="white", command=save)
+    btn_save = tk.Button(frame, text="Сохранить в Excel", bg="#2D6A4F", fg="white", command=save)
     btn_save.pack(side="left", padx=5)
 
 
