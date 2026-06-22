@@ -1,4 +1,4 @@
-name: Build APK with Custom Name
+name: Build APK
 on: [push]
 jobs:
   build:
@@ -7,60 +7,23 @@ jobs:
       run:
         working-directory: Practica 1.0
     steps:
+    
       - uses: actions/checkout@v4
-
+      - name: Show files (for debug)
+        run: ls -la
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet pymysql python-docx androguard
-
-      - name: Build APK (standard)
+          pip install flet pymysql python-docx
+      - name: Build APK
         run: |
           echo y | flet build apk --module-name telefon
-
-      - name: Rename app using androguard
-        run: |
-          ORIG_APK=$(ls build/apk/*.apk | head -n 1)
-          echo "Original APK: $ORIG_APK"
-
-          # Python-скрипт для замены названия
-          python3 << EOF
-          from androguard.core.bytecodes.apk import APK
-
-          apk = APK("$ORIG_APK")
-          manifest = apk.get_android_manifest_xml()
-          # Ищем тег application и меняем android:label
-          for element in manifest.iter():
-              if element.tag == 'application':
-                  element.set('{http://schemas.android.com/apk/res/android}label', 'Алмазный путь')
-                  break
-          # Сохраняем изменённый манифест во временный файл
-          apk.save_manifest('new_manifest.xml')
-          EOF
-
-          # Упаковываем новый APK с изменённым манифестом
-          mkdir apk_work
-          unzip -q "$ORIG_APK" -d apk_work
-          rm -rf apk_work/META-INF
-          cp new_manifest.xml apk_work/AndroidManifest.xml
-          cd apk_work && zip -qr ../repacked.apk . && cd ..
-
-          # Выравниваем и подписываем
-          sudo apt-get update -qq && sudo apt-get install -y -qq zipalign
-          zipalign -p 4 repacked.apk aligned.apk
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
-          apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android aligned.apk
-
-          mkdir final_apk
-          mv aligned.apk final_apk/almaz.apk
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: almaz-apk
-          path: Practica 1.0/final_apk/almaz.apk
+          path: Practica 1.0/build/apk/*.apk
