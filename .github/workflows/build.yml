@@ -19,46 +19,33 @@ jobs:
           python -m pip install --upgrade pip
           pip install flet pymysql python-docx
 
-      - name: Build APK (standard)
+      - name: Build, patch manifest and rebuild APK
         run: |
+          # Первая сборка – создаст Flutter проект и установит Flutter SDK
           echo y | flet build apk --module-name telefon
 
-      - name: Setup apktool and signing tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq apktool zipalign
-          # Создаём debug-ключ для подписи
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
-
-      - name: Patch APK to set custom app name
-        run: |
-          ORIG_APK=$(ls build/apk/*.apk | head -n 1)
-          echo "Original APK: $ORIG_APK"
-          
-          # Распаковываем APK
-          apktool d -f "$ORIG_APK" -o patched_apk
-          
-          # Меняем android:label в AndroidManifest.xml
-          MANIFEST="patched_apk/AndroidManifest.xml"
-          if grep -q 'android:label=' "$MANIFEST"; then
+          # Находим AndroidManifest.xml и меняем название
+          MANIFEST=$(find build/flutter -name AndroidManifest.xml -path "*/src/main/*" | head -n 1)
+          if [ -f "$MANIFEST" ]; then
             sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
-            echo "Label replaced in AndroidManifest.xml"
+            echo "Manifest updated: $MANIFEST"
           fi
-          
-          # Дополнительно меняем app_name в strings.xml (если там)
-          for STRINGS in $(find patched_apk/res -name 'strings.xml'); do
-            sed -i 's/<string name="app_name">[^<]*<\/string>/<string name="app_name">Алмазный путь<\/string>/g' "$STRINGS"
-          done
-          
-          # Собираем APK обратно
-          apktool b patched_apk -o new_unaligned.apk
-          
-          # Выравниваем и подписываем
-          zipalign -p 4 new_unaligned.apk new_aligned.apk
-          apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android new_aligned.apk
-          
-          mkdir final_apk
-          mv new_aligned.apk final_apk/almaz.apk
+
+          # Добавляем Flutter в PATH (он уже установлен в $HOME/.flet/flutter)
+          export PATH="$HOME/.flet/flutter/flutter/bin:$PATH"
+
+          # Находим site-packages для переменной SERIOUS_PYTHON_SITE_PACKAGES
+          export SERIOUS_PYTHON_SITE_PACKAGES=$(find build/flutter/python -type d -name site-packages | head -n 1 | xargs realpath)
+          echo "SITE_PACKAGES=$SERIOUS_PYTHON_SITE_PACKAGES"
+
+          # Пересобираем APK с изменённым манифестом
+          cd build/flutter
+          flutter build apk --release
+          cd ../../
+
+          # Копируем готовый APK в final_apk
+          mkdir -p final_apk
+          cp build/flutter/build/app/outputs/flutter-apk/app-release.apk final_apk/almaz.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
