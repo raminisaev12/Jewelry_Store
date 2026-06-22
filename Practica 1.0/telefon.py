@@ -49,10 +49,11 @@ def main(page: ft.Page):
     page.padding = 10
     page.scroll = ft.ScrollMode.AUTO
 
-    page.window_fullscreen = True
-    page.window_resizable = False
-    page.padding = 0
-    page.spacing = 0
+    page.window_width = 390
+    page.window_height = 844
+    page.window_resizable = True
+    page.padding = 10
+    page.spacing = 10
 
     page.data = {"current_sort": "", "selected_item": None}
 
@@ -77,20 +78,16 @@ def main(page: ft.Page):
         if e.control.value:
             e.control.selection_start = 0
             e.control.selection_end = len(e.control.value)
-            e.control.update()
 
-    def on_focus_clear_if_placeholder(e):
-        pass
-
-    async def enforce_fullscreen():
-        await asyncio.sleep(0.1)
-        page.window_fullscreen = True
-        page.update()
-
-    page.run_task(enforce_fullscreen)
-    # ---------- Поля ввода ----------
-    f_name = ft.TextField(label="Название изделия", expand=True,
-                          input_filter=ft.InputFilter(allow=True, regex_string=r"[А-Яа-яA-Za-z\s\-]+"))
+    f_name = ft.TextField(
+        label="Название изделия",
+        expand=True,
+        input_filter=ft.InputFilter(allow=True, regex_string=r"[А-Яа-яA-Za-z\s\-]+"),
+        suffix=ft.IconButton(
+            icon=ft.Icons.CLEAR,
+            on_click=lambda e: setattr(f_name, 'value', '') or f_name.update()
+        )
+    )
     f_name.on_focus = on_focus_select_all
     f_type = ft.Dropdown(
         label="Тип",
