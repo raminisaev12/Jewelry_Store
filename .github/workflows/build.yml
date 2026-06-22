@@ -8,47 +8,19 @@ jobs:
         working-directory: Practica 1.0
     steps:
       - uses: actions/checkout@v4
-
-      - name: Show files (for debug)
-        run: ls -la
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet pymysql python-docx
-
-      - name: Build APK (initial)
+          pip install flet --upgrade pymysql python-docx
+      - name: Build APK
         run: |
-          echo y | flet build apk --module-name telefon
-
-      - name: Replace app name in AndroidManifest
-        run: |
-          MANIFEST=$(find build/ -name AndroidManifest.xml -path "*/src/main/*" | head -n 1)
-          if [ -f "$MANIFEST" ]; then
-            sed -i 's/android:label="[^"]*"/android:label="Алмазный путь"/g' "$MANIFEST"
-            echo "Manifest updated: $MANIFEST"
-          else
-            echo "Manifest not found!"
-            exit 1
-          fi
-
-      - name: Rebuild APK using Gradle
-        run: |
-          cd build/flutter
-          chmod +x gradlew
-          export ANDROID_HOME=/usr/local/lib/android/sdk
-          export JAVA_HOME=$JAVA_HOME_17_X64
-          ./gradlew assembleRelease
-          mkdir -p ../../final_apk
-          cp build/app/outputs/flutter-apk/app-release.apk ../../final_apk/almaz.apk
-
+          echo y | flet build apk --module-name telefon --name "Алмазный путь"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: almaz-apk
-          path: Practica 1.0/final_apk/almaz.apk
+          path: Practica 1.0/build/apk/*.apk
