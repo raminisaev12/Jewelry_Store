@@ -17,38 +17,41 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flet pymysql python-docx
+          pip install flet pymysql python-docx androguard
 
       - name: Build APK (standard)
         run: |
           echo y | flet build apk --module-name telefon
 
-      - name: Rename app in APK
+      - name: Rename app using androguard
         run: |
-          # Инструменты
-          sudo apt-get update -qq && sudo apt-get install -y -qq zipalign
-
           ORIG_APK=$(ls build/apk/*.apk | head -n 1)
           echo "Original APK: $ORIG_APK"
 
-          # Распаковываем APK как zip
-          mkdir apk_content
-          unzip -q "$ORIG_APK" -d apk_content
-          rm -rf apk_content/META-INF  # старая подпись
+          # Python-скрипт для замены названия
+          python3 << EOF
+          from androguard.core.bytecodes.apk import APK
 
-          # Конвертируем бинарный манифест в текст и меняем название
-          AAPT=/usr/local/lib/android/sdk/build-tools/34.0.0/aapt
-          $AAPT d xmltree apk_content/AndroidManifest.xml > manifest.txt
-          sed -i 's/\(android:label\)="[^"]*"/\1="Алмазный путь"/' manifest.txt
-          
-          # Создаём новый бинарный манифест
-          $AAPT p -M manifest.txt -S dummy -I /usr/local/lib/android/sdk/platforms/android-34/android.jar -F new-manifest.apk
-          unzip -q -o new-manifest.apk AndroidManifest.xml -d apk_content
+          apk = APK("$ORIG_APK")
+          manifest = apk.get_android_manifest_xml()
+          # Ищем тег application и меняем android:label
+          for element in manifest.iter():
+              if element.tag == 'application':
+                  element.set('{http://schemas.android.com/apk/res/android}label', 'Алмазный путь')
+                  break
+          # Сохраняем изменённый манифест во временный файл
+          apk.save_manifest('new_manifest.xml')
+          EOF
 
-          # Упаковываем обратно в APK
-          cd apk_content && zip -qr ../repacked.apk . && cd ..
+          # Упаковываем новый APK с изменённым манифестом
+          mkdir apk_work
+          unzip -q "$ORIG_APK" -d apk_work
+          rm -rf apk_work/META-INF
+          cp new_manifest.xml apk_work/AndroidManifest.xml
+          cd apk_work && zip -qr ../repacked.apk . && cd ..
 
           # Выравниваем и подписываем
+          sudo apt-get update -qq && sudo apt-get install -y -qq zipalign
           zipalign -p 4 repacked.apk aligned.apk
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" 2>/dev/null
           apksigner sign --ks debug.keystore --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android aligned.apk
