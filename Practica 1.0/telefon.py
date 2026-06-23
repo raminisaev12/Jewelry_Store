@@ -2,8 +2,6 @@ import flet as ft
 import pymysql
 import pymysql.cursors
 from datetime import datetime, date
-from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
 import os
 import tempfile
 import asyncio
@@ -614,59 +612,6 @@ def main(page: ft.Page):
             print(ex)
         page.update()
 
-    def save_report_to_excel(e):
-        rows_data = [row.cells for row in report_table.rows]
-        if not rows_data:
-            page.snack_bar = ft.SnackBar(ft.Text("Нет данных для сохранения"), bgcolor="red")
-            page.snack_bar.open = True
-            page.update()
-            return
-
-        # Получаем заголовки колонок из DataTable
-        headers = [col.label.value for col in report_table.columns]
-        num_cols = len(headers)
-
-        # Колонки, которые полностью состоят из "—"
-        exclude_indices = []
-        for col_idx in range(num_cols):
-            if all(str(row[col_idx].content.value) == "—" for row in rows_data):
-                exclude_indices.append(col_idx)
-
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Отчёт"
-
-        # Заголовки без исключённых
-        filtered_headers = [h for i, h in enumerate(headers) if i not in exclude_indices]
-        ws.append(filtered_headers)
-
-        # Данные
-        for row_cells in rows_data:
-            filtered_row = []
-            for i, cell in enumerate(row_cells):
-                if i not in exclude_indices:
-                    filtered_row.append(str(cell.content.value))
-            ws.append(filtered_row)
-
-        # Автоширина
-        for col_cells in ws.columns:
-            max_len = 0
-            col_letter = get_column_letter(col_cells[0].column)
-            for cell in col_cells:
-                if cell.value:
-                    max_len = max(max_len, len(str(cell.value)))
-            ws.column_dimensions[col_letter].width = min(max_len + 2, 30)
-
-        file_path = os.path.join(tempfile.gettempdir(), "report.xlsx")
-        wb.save(file_path)
-        page.snack_bar = ft.SnackBar(
-            ft.Text(f"Отчёт сохранён в Excel!\n{file_path}"),
-            bgcolor="green",
-            duration=5000
-        )
-        page.snack_bar.open = True
-        page.update()
-
     def reset_all_report_filters():
         report_date_from.value = ""
         report_date_to.value = ""
@@ -691,7 +636,6 @@ def main(page: ft.Page):
                 ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, wrap=True),
                 ft.Row([
                     ft.Button("Эффективность", on_click=lambda _: load_efficiency(), bgcolor=btn_color, color="white"),
-                    ft.Button("Сохранить в Excel", on_click=save_report_to_excel, bgcolor="#1E90FF", color="white"),
                 ], alignment=ft.MainAxisAlignment.SPACE_EVENLY, wrap=True),
                 ft.Text("💡 Листайте отчёт влево/вправо", size=11, italic=True, color="grey600"),
                 ft.Container(

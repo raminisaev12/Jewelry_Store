@@ -5,7 +5,6 @@ import pymysql
 from tkinter import messagebox
 import random
 from tkcalendar import DateEntry
-from docx import Document
 from tkinter import filedialog
 from datetime import date
 import sys
